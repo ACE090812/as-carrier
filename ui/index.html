@@ -167,7 +167,7 @@
 </div>
 <script>
 (function () {
-    var RESOURCE = 'as_carrier';
+    var RESOURCE = 'as-carrier';
     var state = null;
     var loaded = false;
     var busy = false;
@@ -343,7 +343,7 @@
     }
 
     function refresh() {
-        post('as_carrier/status').then(function (res) {
+        post('sd_carrier/status').then(function (res) {
             state = (res && res.ok) ? res.data : null;
             loaded = true;
             render();
@@ -352,7 +352,7 @@
 
     function handlePay() {
         busy = true; render();
-        post('as_carrier/payBill').then(function (res) {
+        post('sd_carrier/payBill').then(function (res) {
             busy = false;
             if (!res || !res.ok) { errMsg = (res && res.error) || 'Payment failed'; render(); return; }
             state = res.data; render();
@@ -361,7 +361,7 @@
 
     function selectPlan(planId) {
         busy = true; render();
-        post('as_carrier/selectPlan', { planId: planId }).then(function (res) {
+        post('sd_carrier/selectPlan', { planId: planId }).then(function (res) {
             busy = false; pickingPlan = false;
             if (!res || !res.ok) { errMsg = (res && res.error) || 'Failed to switch plans'; render(); return; }
             state = res.data; render();
@@ -373,7 +373,7 @@
         var next = !state.autoPay;
         state = Object.assign({}, state, { autoPay: next });
         render();
-        post('as_carrier/setAutoPay', { on: next }).then(function (res) {
+        post('sd_carrier/setAutoPay', { on: next }).then(function (res) {
             if (!res || !res.ok) { state = Object.assign({}, state, { autoPay: !next }); render(); }
         });
     }
@@ -383,7 +383,7 @@
         stopHeartbeat();
         heartbeatTimer = setInterval(function () {
             if (document.visibilityState !== 'visible') return;
-            post('as_carrier/dataHeartbeat');
+            post('sd_carrier/dataHeartbeat');
         }, (seconds || 60) * 1000);
     }
     function stopHeartbeat() {
@@ -398,7 +398,7 @@
         document.documentElement.style.visibility = 'visible';
         document.body.style.visibility = 'visible';
         refresh();
-        post('as_carrier/config').then(function (cfg) {
+        post('sd_carrier/config').then(function (cfg) {
             startHeartbeat((cfg && cfg.dataHeartbeatSeconds) || 60);
         });
     }
@@ -408,7 +408,7 @@
         var data = event.data;
         if (!data || typeof data !== 'object') return;
         if (!shown) return;
-        if (data.action === 'as_carrier:updated') { refresh(); return; }
+        if (data.action === 'sd_carrier:updated') { refresh(); return; }
         if (data.action === 'sd-phone:theme' && data.theme) {
             document.body.setAttribute('data-theme', data.theme);
         }
