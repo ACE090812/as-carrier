@@ -1,4 +1,4 @@
-# sd_carrier
+# as_carrier
 
 A standalone Carrier / phone-bill app, registered into sd-phone through its real, documented
 `addCustomApp` API. Nothing in sd-phone's own files is touched - this ships as its own resource
