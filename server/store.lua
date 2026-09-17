@@ -1,8 +1,3 @@
--- Persistence for the Carrier app. One row per citizenid tracking the active cycle's usage +
--- status, plus a history table of past invoices. Own table names (sd_carrier_*) so this never
--- shares or collides with any billing tables sd-phone itself (or another copy of this feature)
--- might already have.
-
 local store = {}
 
 local function newId(len)
@@ -92,9 +87,6 @@ function store.addDataMB(cid, mb)
     MySQL.update.await('UPDATE sd_carrier_accounts SET data_mb_used = data_mb_used + ? WHERE citizenid = ?', { mb, cid })
 end
 
----Closes out the current cycle (usage reset, moved into a new cycle window) and records the
----balance owed for the cycle just ended, in one write. balanceSince is stamped as "now" whenever
----balanceDue > 0 (a fresh invoice) - it is NOT the next due_at.
 function store.rollCycle(cid, newCycleStart, newDueAt, balanceDue, balanceSince)
     MySQL.update.await([[
         UPDATE sd_carrier_accounts
