@@ -1,28 +1,3 @@
--- Carrier app logic: plans, usage tallying, cycle rollover/invoicing, and pay/auto-pay.
---
--- Usage recording hooks two events sd-phone ALREADY fires natively - nothing in sd-phone itself
--- is edited for this:
---   * 'sd-phone:server:call:ended'    fired by sd-phone's own server/calls/actions.lua for every
---                                     call lifecycle. `call.caller.citizenid` / `call.callee.citizenid`
---                                     / `call.duration` are exactly what billing needs.
---   * 'sd-phone:server:messages:sent' fired by sd-phone's own server/messages/actions.lua for
---                                     every message that actually goes out (the sender's id is
---                                     `payload.citizenid`, NOT `senderCid` - a bridge that assumes
---                                     the latter silently never counts a single text).
---
--- What this resource deliberately does NOT do: meter App Store downloads against the data
--- allowance. Doing that faithfully needs a call from inside sd-phone's own server/apps/actions.lua
--- (there's no public event fired around an app install to hook instead), and this resource never
--- edits sd-phone's files. Data usage is still tracked and billed via the heartbeat below - only
--- "downloads cost extra data" is the one feature this can't reproduce without touching sd-phone.
---
--- What this resource also can't do: actually block calls/texts once an account is suspended.
--- server/service.lua is the single gate calls/texts run through in sd-phone, and it has no export
--- or event another resource can hook to add a condition. Suspension here is a real, tracked
--- status - the app shows it, and 'sd_carrier:accountSuspended'/'sd_carrier:accountRestored'
--- server events fire so you can act on it yourself - but it is not an automatic service cutoff.
--- See the README for both of these.
-
 local store = require 'server.store'
 local Bridge = CarrierBridge or require 'server.bridge'
 
@@ -43,8 +18,6 @@ CreateThread(function()
     end
 end)
 
----@type table<string, boolean> citizenid -> true while suspended (informational only - see the
----header above on why this can't actually gate calls/texts).
 local suspended = {}
 
 local function planFor(id)
@@ -88,9 +61,6 @@ end
 
 local pushUpdate
 
----Advances a citizenid's cycle if its due date has passed: raises an invoice, tries auto-pay when
----`source` names an online player and the account opted in, and escalates status
----(current -> due -> suspended) based on how long any still-unpaid balance has sat unpaid.
 local function maybeAdvanceCycle(source, cid, row)
     local now = os.time()
 
@@ -270,9 +240,6 @@ lib.callback.register('sd_carrier:dataHeartbeat', function(source)
     return { ok = true }
 end)
 
----Adds a completed call's duration to the caller's usage, rounding up to the next whole minute.
----Fire-and-forget: a player with no billing account yet is silently skipped rather than created
----here (their account is created lazily the first time they open the app or place a call).
 local function recordCallSeconds(cid, seconds)
     if type(cid) ~= 'string' or cid == '' then return end
     seconds = tonumber(seconds) or 0
@@ -299,20 +266,10 @@ end)
 
 AddEventHandler('sd-phone:server:messages:sent', function(payload)
     if type(payload) ~= 'table' then return end
-    -- sd-phone's own event: the sender's citizenid is `citizenid` on a real 1:1 send (`system`
-    -- and `group` sends carry no billable sender the same way a normal text does).
     if payload.system or payload.group then return end
     recordText(payload.citizenid)
 end)
 
----Meters an off-Wi-Fi App Store download against the caller's data allowance, exactly mirroring
----sd-phone's own server/billing/actions.lua's tryConsumeDownloadData - so sd-phone's
----server/apps/actions.lua can call whichever one is actually active. Requires ONE small edit in
----sd-phone's own server/apps/actions.lua (see this resource's README) since there's no public
----event fired around a download to hook instead.
----@param source number player server id
----@param mb number size of the download in MB
----@return table result { success: boolean, message?: string }
 local function tryConsumeDownloadData(source, mb)
     local cid = Bridge.getIdentifier(source)
     if not cid then return { success = false, message = 'Player not found' } end
