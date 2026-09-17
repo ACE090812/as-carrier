@@ -3,6 +3,7 @@ Config = {
     -- 'standalone' has no real bank accounts - Pay Now / auto-pay always succeeds.
     framework = 'auto',
 
+    -- How the app shows up in the App Store / home screen.
     app = {
         identifier  = 'carrier',
         name        = 'Carrier',
@@ -13,6 +14,10 @@ Config = {
     billing = {
         -- Days per billing cycle.
         cycleDays = 28,
+        -- Days a bill can sit unpaid after its due date before the account is marked suspended.
+        -- Suspension is always tracked and displayed by the app. To make it actually cut off
+        -- calls/texts/data, add the small server/service.lua edit documented in the README -
+        -- without it, suspension is real and visible but not enforced by sd-phone itself.
         graceDays = 3,
 
         -- The plan a citizenid is put on the first time they're ever billed.

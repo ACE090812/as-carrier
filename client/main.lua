@@ -4,6 +4,7 @@ CreateThread(function()
         name        = Config.app.name,
         description = Config.app.description,
         icon        = Config.app.icon ~= '' and Config.app.icon or nil,
+
         ui = GetCurrentResourceName() .. '/ui/index.html',
     })
     if not ok then

@@ -266,6 +266,7 @@ end)
 
 AddEventHandler('sd-phone:server:messages:sent', function(payload)
     if type(payload) ~= 'table' then return end
+
     if payload.system or payload.group then return end
     recordText(payload.citizenid)
 end)
@@ -289,3 +290,7 @@ local function tryConsumeDownloadData(source, mb)
 end
 
 exports('tryConsumeDownloadData', tryConsumeDownloadData)
+
+exports('isSuspendedCached', function(cid)
+    return suspended[cid] == true
+end)

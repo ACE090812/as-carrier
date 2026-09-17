@@ -34,6 +34,7 @@ function CarrierBridge.getIdentifier(source)
         local xPlayer = ESX.GetPlayerFromId(source)
         return xPlayer and xPlayer.identifier or nil
     end
+
     return source and ('standalone:' .. tostring(source)) or nil
 end
 
@@ -70,6 +71,7 @@ function CarrierBridge.removeMoney(source, account, amount)
         xPlayer.removeAccountMoney(account, amount)
         return true
     end
+
     return true
 end
 
