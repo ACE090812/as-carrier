@@ -27,13 +27,6 @@
         --hairline: rgba(255,255,255,0.10);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    /* Per sd-phone's own custom-app docs: FiveM renders every resource's ui_page as a fullscreen
-       overlay continuously, and any background color painted on html/body shows through even
-       while "hidden" via display/opacity tricks. The documented fix is visibility:hidden PLUS a
-       transparent html/body background - the real background lives on #app below instead - and
-       only flipping html/body to visible once sd-phone's own 'componentsLoaded' message arrives
-       (sent only to the copy it actually frames inside the phone, never to this file's own raw
-       ui_page instance). That's what stops the app appearing the moment the resource starts. */
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
         visibility: hidden;
@@ -41,10 +34,6 @@
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
         overflow: hidden;
     }
-    /* The iframe sd-phone gives a custom app can be a normal phone-sized box, or - as on this
-       server, apparently a "device"/landscape-style phone render - a much larger desktop-sized
-       one. Rather than assume either, the whole UI is capped to a phone-width column and
-       centered, so it always looks like a phone screen regardless of how big the actual frame is. */
     #app {
         position: absolute; inset: 0; display: flex; justify-content: center;
         background: var(--bg);
@@ -387,7 +376,6 @@
         });
     }
 
-    // Data heartbeat: only while this page is visible (i.e. Carrier is the open, foreground app).
     var heartbeatTimer = null;
     function startHeartbeat(seconds) {
         stopHeartbeat();
@@ -404,8 +392,6 @@
     function showApp() {
         if (shown) return;
         shown = true;
-        // The documented reveal step: flip html/body visible now that sd-phone has actually
-        // framed and loaded this page inside the app - never before this fires.
         document.documentElement.style.visibility = 'visible';
         document.body.style.visibility = 'visible';
         refresh();
@@ -414,11 +400,6 @@
         });
     }
 
-    // sd-phone's own custom-app handshake: it posts the plain string 'componentsLoaded' to this
-    // page's window once - and only once - it has actually framed this file inside the phone's
-    // app view. This raw file's own top-level ui_page instance (the one FiveM loads unconditionally
-    // the moment the resource starts) never receives this message, so it stays invisible forever
-    // (per the html,body{visibility:hidden} rule above) and never calls showApp().
     window.addEventListener('message', function (event) {
         if (event.data === 'componentsLoaded') { showApp(); return; }
         var data = event.data;
