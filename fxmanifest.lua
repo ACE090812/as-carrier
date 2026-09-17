@@ -3,7 +3,7 @@ game 'gta5'
 lua54 'yes'
 
 name 'as-carrier'
-author 'you'
+author 'ACE Studios'
 description 'Standalone Carrier/phone-bill app, registered into sd-phone through its real addCustomApp API - no sd-phone core files touched.'
 version '1.0.0'
 

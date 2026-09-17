@@ -5,10 +5,10 @@ Config = {
 
     -- How the app shows up in the App Store / home screen.
     app = {
-        identifier  = 'carrier',
-        name        = 'Carrier',
+        identifier  = 'aeromobile',
+        name        = 'Aero Mobile',
         description = 'Your plan, usage and phone bill.',
-        icon = '',
+        icon = 'nui://as-carrier/ui/icon.png',
     },
 
     billing = {

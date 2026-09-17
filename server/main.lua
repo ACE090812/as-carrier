@@ -14,7 +14,7 @@ local GRACE_SECONDS = math.max(0, math.floor(tonumber(billingCfg.graceDays) or 3
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
-        print(('[as_carrier] failed to create its tables: %s'):format(tostring(err)))
+        print(('[sd_carrier] failed to create its tables: %s'):format(tostring(err)))
     end
 end)
 
@@ -73,9 +73,9 @@ local function maybeAdvanceCycle(source, cid, row)
             local wasSuspended = row.status == 'suspended'
             row.status = nextStatus
             if nextStatus == 'suspended' and not wasSuspended then
-                TriggerEvent('as_carrier:accountSuspended', cid)
+                TriggerEvent('sd_carrier:accountSuspended', cid)
             elseif wasSuspended and nextStatus ~= 'suspended' then
-                TriggerEvent('as_carrier:accountRestored', cid)
+                TriggerEvent('sd_carrier:accountRestored', cid)
             end
         end
         suspended[cid] = row.status == 'suspended'
@@ -120,7 +120,7 @@ local function maybeAdvanceCycle(source, cid, row)
 
     local wasSuspended = suspended[cid] == true
     suspended[cid] = row.status == 'suspended'
-    if suspended[cid] and not wasSuspended then TriggerEvent('as_carrier:accountSuspended', cid) end
+    if suspended[cid] and not wasSuspended then TriggerEvent('sd_carrier:accountSuspended', cid) end
     pushUpdate(source)
 
     if source and newBalance > 0 then
@@ -177,16 +177,16 @@ local function statusFor(source)
 end
 
 function pushUpdate(src)
-    if src then TriggerClientEvent('as_carrier:client:updated', src, {}) end
+    if src then TriggerClientEvent('sd_carrier:client:updated', src, {}) end
 end
 
-lib.callback.register('as_carrier:status', function(source)
+lib.callback.register('sd_carrier:status', function(source)
     local data, err = statusFor(source)
     if not data then return { ok = false, error = err } end
     return { ok = true, data = data }
 end)
 
-lib.callback.register('as_carrier:selectPlan', function(source, payload)
+lib.callback.register('sd_carrier:selectPlan', function(source, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = Bridge.getIdentifier(source)
     if not cid then return { ok = false, error = 'Player not found' } end
@@ -198,7 +198,7 @@ lib.callback.register('as_carrier:selectPlan', function(source, payload)
     return { ok = true, data = data }
 end)
 
-lib.callback.register('as_carrier:setAutoPay', function(source, payload)
+lib.callback.register('sd_carrier:setAutoPay', function(source, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = Bridge.getIdentifier(source)
     if not cid then return { ok = false, error = 'Player not found' } end
@@ -208,7 +208,7 @@ lib.callback.register('as_carrier:setAutoPay', function(source, payload)
     return { ok = true, data = { autoPay = payload.on == true } }
 end)
 
-lib.callback.register('as_carrier:payBill', function(source)
+lib.callback.register('sd_carrier:payBill', function(source)
     local cid = Bridge.getIdentifier(source)
     if not cid then return { ok = false, error = 'Player not found' } end
 
@@ -225,13 +225,13 @@ lib.callback.register('as_carrier:payBill', function(source)
     store.markLatestPaid(cid, os.time())
     store.clearBalance(cid)
     suspended[cid] = false
-    TriggerEvent('as_carrier:accountRestored', cid)
+    TriggerEvent('sd_carrier:accountRestored', cid)
 
     local data = statusFor(source)
     return { ok = true, data = data }
 end)
 
-lib.callback.register('as_carrier:dataHeartbeat', function(source)
+lib.callback.register('sd_carrier:dataHeartbeat', function(source)
     local cid = Bridge.getIdentifier(source)
     if not cid then return { ok = false, error = 'Player not found' } end
     ensureAccount(cid)

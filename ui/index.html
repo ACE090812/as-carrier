@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Carrier</title>
+<title>Aero Mobile</title>
 <style>
     :root {
         --bg: #ffffff;
@@ -47,6 +47,9 @@
     }
     .safe-top { height: 54px; flex-shrink: 0; }
     .title { padding: 0 20px 8px; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+    .brand-row { padding: 0 20px 8px; display: flex; align-items: center; gap: 10px; }
+    .brand-row .brand-icon { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; }
+    .brand-row .brand-name { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
     .scroll { flex: 1; overflow-y: auto; padding: 8px 16px 40px; -ms-overflow-style: none; scrollbar-width: none; }
     .scroll::-webkit-scrollbar { display: none; }
 
@@ -161,7 +164,10 @@
 <div id="app">
     <div id="phone-col">
         <div class="safe-top"></div>
-        <div class="title">Carrier</div>
+        <div class="brand-row">
+            <img class="brand-icon" src="header-icon.png" alt="Aero Mobile">
+            <span class="brand-name">Aero Mobile</span>
+        </div>
         <div class="scroll" id="scroll"></div>
     </div>
 </div>
