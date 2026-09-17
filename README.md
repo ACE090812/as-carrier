@@ -6,9 +6,9 @@ with its own server logic, its own database tables, and its own NUI page.
 
 ## Setup
 
-1. Drop this folder into your resources as `sd_carrier`.
+1. Drop this folder into your resources as `as_carrier`.
 2. Make sure `oxmysql` and `sd-phone` are both started before it (`ensure oxmysql`, `ensure sd-phone`,
-   then `ensure sd_carrier` - order matters for the `dependencies` in fxmanifest.lua to resolve).
+   then `ensure as_carrier` - order matters for the `dependencies` in fxmanifest.lua to resolve).
 3. `Config.framework` in `config.lua` is `'auto'` by default (detects qbx_core / qb-core /
    es_extended, falls back to standalone). Set it explicitly if you'd rather skip detection.
 4. `Config.payment.account` is `'bank'` by default - the account your framework's
@@ -41,17 +41,17 @@ hand from the app. An unpaid bill past `Config.billing.graceDays` marks the acco
   `server/service.lua` is the single gate calls, texts, and data downloads run through, and out
   of the box it doesn't know this resource exists. This resource always tracks and displays
   suspension for real (the app shows "Service Suspended" and stops looking current) and fires
-  `sd_carrier:accountSuspended` / `sd_carrier:accountRestored` server events either way.
+  `as_carrier:accountSuspended` / `as_carrier:accountRestored` server events either way.
 - **App Store downloads aren't metered against data - unless you add the other edit below.**
   There's no public event fired around a download that a separate resource can hook, so out of
-  the box `sd_carrier` only meters data from calls, texts, and the in-app heartbeat.
+  the box `as_carrier` only meters data from calls, texts, and the in-app heartbeat.
 
 These are the only two pieces of sd-phone's own files this app ever needs touched; everything
 else in this README ships with zero core edits.
 
 ### Optional: make suspension actually cut off service
 
-`sd_carrier` exports `isSuspendedCached(cid)` (see `server/main.lua`) - a cheap table lookup, not
+`as_carrier` exports `isSuspendedCached(cid)` (see `server/main.lua`) - a cheap table lookup, not
 a query. To wire it up, open sd-phone's `server/service.lua` and find
 `function service.allows(source, capability)`:
 
@@ -69,9 +69,9 @@ Replace it with:
 function service.allows(source, capability)
     if source then
         local cid = player.getIdentifier(source)
-        if cid and GetResourceState('sd_carrier') == 'started' then
+        if cid and GetResourceState('as_carrier') == 'started' then
             local resOk, isSuspended = pcall(function()
-                return exports['sd_carrier']:isSuspendedCached(cid)
+                return exports['as_carrier']:isSuspendedCached(cid)
             end)
             if resOk and isSuspended then return false end
         end
@@ -88,7 +88,7 @@ top of `service.lua`.
 
 ### Optional: make downloads cost data too
 
-`sd_carrier` exports `tryConsumeDownloadData(source, sizeMB)` (see `server/main.lua`), returning
+`as_carrier` exports `tryConsumeDownloadData(source, sizeMB)` (see `server/main.lua`), returning
 `{ success, message }`. To wire it up, open sd-phone's `server/apps/actions.lua` and find this
 line inside `actions.install` (under the off-Wi-Fi branch):
 
@@ -100,9 +100,9 @@ Add this right after it:
 
 ```lua
 local dataResult = { success = true }
-if GetResourceState('sd_carrier') == 'started' then
+if GetResourceState('as_carrier') == 'started' then
     local resOk, result = pcall(function()
-        return exports['sd_carrier']:tryConsumeDownloadData(source, sizeMB)
+        return exports['as_carrier']:tryConsumeDownloadData(source, sizeMB)
     end)
     dataResult = (resOk and type(result) == 'table') and result or { success = true }
 end
@@ -118,14 +118,14 @@ if not dataResult.success then
 end
 ```
 
-Downloads simply aren't charged against data if `sd_carrier` isn't installed/started - same as
+Downloads simply aren't charged against data if `as_carrier` isn't installed/started - same as
 always being on Wi-Fi.
 
 ## Files
 
 - `config.lua` - framework, payment account, app identity, plans and cycle timing.
 - `server/bridge.lua` - framework detection (qb/qbx/esx/standalone) for identifiers and money.
-- `server/store.lua` - MySQL persistence (`sd_carrier_accounts` / `sd_carrier_history` - its own
+- `server/store.lua` - MySQL persistence (`as_carrier_accounts` / `as_carrier_history` - its own
   tables, never shared with sd-phone's own schema).
 - `server/main.lua` - the billing logic: cycle rollover, invoicing, pay/auto-pay, usage hooks.
 - `client/main.lua` - registers the app with sd-phone and bridges its NUI page to the callbacks.
