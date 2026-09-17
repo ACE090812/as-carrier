@@ -35,54 +35,91 @@ At the end of a cycle a bill is raised for the plan price plus any overage. Auto
 per player) tries to charge the configured account on the due date; otherwise the player pays by
 hand from the app. An unpaid bill past `Config.billing.graceDays` marks the account `suspended`.
 
-## Known limitations (both are a direct consequence of never touching sd-phone's own files)
+## Known limitations (optional edits below turn both of these on)
 
-- **Suspension doesn't block calls/texts.** sd-phone's own `server/service.lua` is the single
-  gate calls and texts run through, and it has no export or event another resource can hook to
-  add a condition to it. This resource tracks and displays suspension for real (the app shows
-  "Service Suspended" and stops looking current), and fires `sd_carrier:accountSuspended` /
-  `sd_carrier:accountRestored` server events you can listen for yourself if you want to act on
-  it (e.g. from a resource that *is* willing to patch `service.lua`), but it can't enforce the
-  cutoff on its own.
-- **App Store downloads aren't metered against data - unless you add the one small edit below.**
+- **Suspension doesn't block calls/texts/data - unless you add the edit below.** sd-phone's own
+  `server/service.lua` is the single gate calls, texts, and data downloads run through, and out
+  of the box it doesn't know this resource exists. This resource always tracks and displays
+  suspension for real (the app shows "Service Suspended" and stops looking current) and fires
+  `sd_carrier:accountSuspended` / `sd_carrier:accountRestored` server events either way.
+- **App Store downloads aren't metered against data - unless you add the other edit below.**
   There's no public event fired around a download that a separate resource can hook, so out of
   the box `sd_carrier` only meters data from calls, texts, and the in-app heartbeat.
 
-### Optional: make downloads cost data too
+These are the only two pieces of sd-phone's own files this app ever needs touched; everything
+else in this README ships with zero core edits.
 
-`sd_carrier` exports `tryConsumeDownloadData(source, sizeMB)` (see `server/main.lua`), matching
-the exact `{ success, message }` shape sd-phone's own built-in Carrier feature uses. To wire it
-up, open sd-phone's `server/apps/actions.lua` and find this line inside `actions.install`
-(under the off-Wi-Fi branch):
+### Optional: make suspension actually cut off service
+
+`sd_carrier` exports `isSuspendedCached(cid)` (see `server/main.lua`) - a cheap table lookup, not
+a query. To wire it up, open sd-phone's `server/service.lua` and find
+`function service.allows(source, capability)`:
 
 ```lua
-local dataResult = billing.tryConsumeDownloadData(source, sizeMB)
+function service.allows(source, capability)
+    if #TOWERS == 0 then return true end
+    if celltowers.allows(service.levelFor(source), capability, THRESHOLDS) then return true end
+    return wifiServer.provides(source, capability)
+end
 ```
 
 Replace it with:
 
 ```lua
-local dataResult
-if util.appEnabled('billing') then
-    dataResult = billing.tryConsumeDownloadData(source, sizeMB)
-elseif GetResourceState('sd_carrier') == 'started' then
+function service.allows(source, capability)
+    if source then
+        local cid = player.getIdentifier(source)
+        if cid and GetResourceState('sd_carrier') == 'started' then
+            local resOk, isSuspended = pcall(function()
+                return exports['sd_carrier']:isSuspendedCached(cid)
+            end)
+            if resOk and isSuspended then return false end
+        end
+    end
+
+    if #TOWERS == 0 then return true end
+    if celltowers.allows(service.levelFor(source), capability, THRESHOLDS) then return true end
+    return wifiServer.provides(source, capability)
+end
+```
+
+No new `require` is needed - `player` (for `player.getIdentifier`) is already required near the
+top of `service.lua`.
+
+### Optional: make downloads cost data too
+
+`sd_carrier` exports `tryConsumeDownloadData(source, sizeMB)` (see `server/main.lua`), returning
+`{ success, message }`. To wire it up, open sd-phone's `server/apps/actions.lua` and find this
+line inside `actions.install` (under the off-Wi-Fi branch):
+
+```lua
+local sizeMB = tonumber(def and def.sizeMB) or 35
+```
+
+Add this right after it:
+
+```lua
+local dataResult = { success = true }
+if GetResourceState('sd_carrier') == 'started' then
     local resOk, result = pcall(function()
         return exports['sd_carrier']:tryConsumeDownloadData(source, sizeMB)
     end)
     dataResult = (resOk and type(result) == 'table') and result or { success = true }
-else
-    dataResult = { success = true }
+end
+
+if not dataResult.success then
+    TriggerClientEvent('sd-phone:client:notify', source, {
+        app = 'carrier', appId = 'carrier',
+        title = 'Out of Data',
+        body  = dataResult.message,
+        time  = 'now',
+    })
+    return dataResult
 end
 ```
 
-`util` is already imported at the top of that file (`local util = require 'server.util'`), so no
-other change is needed. This uses whichever Carrier feature is actually enabled - the built-in
-one, or `sd_carrier` if the built-in one is switched off in `configs/apps.lua` (`enabled = false`
-on the `billing` entry) - and never double-charges when both would otherwise apply. If neither is
-enabled, downloads are simply never charged against data, same as always being on Wi-Fi.
-
-This is the one piece of sd-phone's own files this app needs touched to fully match the original
-built-in feature; everything else in this README ships with zero core edits.
+Downloads simply aren't charged against data if `sd_carrier` isn't installed/started - same as
+always being on Wi-Fi.
 
 ## Files
 
