@@ -2,7 +2,7 @@ fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
 
-name 'as_carrier'
+name 'as-carrier'
 author 'you'
 description 'Standalone Carrier/phone-bill app, registered into sd-phone through its real addCustomApp API - no sd-phone core files touched.'
 version '1.0.0'
