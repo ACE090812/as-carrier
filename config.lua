@@ -3,33 +3,16 @@ Config = {
     -- 'standalone' has no real bank accounts - Pay Now / auto-pay always succeeds.
     framework = 'auto',
 
-    -- How the app shows up in the App Store / home screen.
     app = {
         identifier  = 'carrier',
         name        = 'Carrier',
         description = 'Your plan, usage and phone bill.',
-        -- No icon shipped - sd-phone falls back to an automatic letter tile when this is empty.
-        -- Point this at your own image (as a 'nui://sd_carrier/ui/whatever.png' or a plain
-        -- 'sd_carrier/ui/whatever.png' path) if you want a real icon instead.
         icon = '',
     },
 
-    -- A real phone bill: pay-monthly plans, each with its own price and included minutes/texts/
-    -- data. Usage is tallied through the cycle (calls from their logged duration, texts per send,
-    -- data from an approximate cellular-use heartbeat - see server/main.lua's header for why data
-    -- can't be metered byte-for-byte without editing sd-phone's own app-install code, which this
-    -- resource deliberately never does), and at the end of the cycle a bill is raised for the plan
-    -- price plus any overage. Auto-pay (opt-in, per player) tries to charge the bank on the due
-    -- date; otherwise the player pays by hand in the app.
     billing = {
         -- Days per billing cycle.
         cycleDays = 28,
-        -- Days a bill can sit unpaid after its due date before the account is marked suspended.
-        -- NOTE: this resource cannot actually block calls/texts on suspension without editing
-        -- sd-phone's own server/service.lua (the single gate calls/texts run through) - see the
-        -- README's "Known limitation" section. Suspension here is a real, tracked status the app
-        -- displays (and you can act on it yourself, e.g. from a script listening for
-        -- 'sd_carrier:accountSuspended'), just not an automatic service cutoff.
         graceDays = 3,
 
         -- The plan a citizenid is put on the first time they're ever billed.
