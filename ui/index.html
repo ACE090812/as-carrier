@@ -1,0 +1,439 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Carrier</title>
+<style>
+    :root {
+        --bg: #ffffff;
+        --text: #000000;
+        --text-dim: #8e8e93;
+        --surface: #f2f2f7;
+        --elevated: #ffffff;
+        --hairline: rgba(0,0,0,0.08);
+        --red: #ff453a;
+        --yellow: #ffd60a;
+        --green: #30d158;
+        --blue: #0a84ff;
+        --orange: #ff9f0a;
+    }
+    body[data-theme="dark"] {
+        --bg: #000000;
+        --text: #ffffff;
+        --text-dim: #8e8e93;
+        --surface: #1c1c1e;
+        --elevated: #1c1c1e;
+        --hairline: rgba(255,255,255,0.10);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    /* Per sd-phone's own custom-app docs: FiveM renders every resource's ui_page as a fullscreen
+       overlay continuously, and any background color painted on html/body shows through even
+       while "hidden" via display/opacity tricks. The documented fix is visibility:hidden PLUS a
+       transparent html/body background - the real background lives on #app below instead - and
+       only flipping html/body to visible once sd-phone's own 'componentsLoaded' message arrives
+       (sent only to the copy it actually frames inside the phone, never to this file's own raw
+       ui_page instance). That's what stops the app appearing the moment the resource starts. */
+    html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        visibility: hidden;
+        background: transparent; color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+        overflow: hidden;
+    }
+    /* The iframe sd-phone gives a custom app can be a normal phone-sized box, or - as on this
+       server, apparently a "device"/landscape-style phone render - a much larger desktop-sized
+       one. Rather than assume either, the whole UI is capped to a phone-width column and
+       centered, so it always looks like a phone screen regardless of how big the actual frame is. */
+    #app {
+        position: absolute; inset: 0; display: flex; justify-content: center;
+        background: var(--bg);
+    }
+    #phone-col {
+        position: relative;
+        width: 100%; max-width: 430px; height: 100%; max-height: 932px;
+        display: flex; flex-direction: column; background: var(--bg);
+    }
+    .safe-top { height: 54px; flex-shrink: 0; }
+    .title { padding: 0 20px 8px; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+    .scroll { flex: 1; overflow-y: auto; padding: 8px 16px 40px; -ms-overflow-style: none; scrollbar-width: none; }
+    .scroll::-webkit-scrollbar { display: none; }
+
+    .banner {
+        display: flex; gap: 10px; align-items: flex-start;
+        background: rgba(255,69,58,0.10); border-radius: 14px; padding: 12px 16px; margin-bottom: 16px;
+    }
+    .banner .icon { color: var(--red); font-size: 18px; line-height: 1; margin-top: 2px; }
+    .banner .t { font-size: 15px; font-weight: 600; color: var(--red); }
+    .banner .b { font-size: 13px; color: var(--red); opacity: 0.8; margin-top: 2px; line-height: 1.35; }
+
+    .plan-card {
+        position: relative; width: 100%; border-radius: 22px; padding: 20px 20px 18px;
+        color: #fff; text-align: left; border: none; cursor: pointer;
+        background: linear-gradient(135deg, #2b6cff 0%, #1746c9 60%, #0d2c8a 100%);
+        box-shadow: 0 12px 24px rgba(23,70,201,0.35);
+        overflow: hidden;
+    }
+    .plan-card::before {
+        content: ""; position: absolute; inset: 0; pointer-events: none;
+        background: radial-gradient(circle at 85% -10%, rgba(255,255,255,0.25), transparent 55%);
+    }
+    .plan-card .row { position: relative; display: flex; align-items: flex-start; justify-content: space-between; }
+    .plan-card .eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.75); }
+    .plan-card .label { margin-top: 2px; font-size: 24px; font-weight: 800; }
+    .plan-card .pill {
+        margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;
+        background: rgba(255,255,255,0.16); border-radius: 999px; padding: 4px 10px 4px 8px;
+        font-size: 13px; font-weight: 600;
+    }
+    .plan-card .dot { width: 7px; height: 7px; border-radius: 999px; }
+    .plan-card .price { text-align: right; }
+    .plan-card .price .amt { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .plan-card .price .per { font-size: 11px; color: rgba(255,255,255,0.75); }
+    .plan-card .change {
+        position: relative; margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 6px;
+        background: rgba(255,255,255,0.14); border-radius: 14px; padding: 10px; font-size: 14px; font-weight: 600;
+    }
+
+    .rings { margin-top: 16px; display: flex; gap: 12px; }
+    .ring-card { flex: 1; display: flex; flex-direction: column; align-items: center; background: var(--surface); border-radius: 18px; padding: 14px 10px; }
+    .ring-wrap { position: relative; width: 64px; height: 64px; }
+    .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .ring-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+    .ring-label { margin-top: 8px; font-size: 12px; font-weight: 600; }
+    .ring-sub { margin-top: 2px; font-size: 11px; color: var(--text-dim); }
+
+    .hint { margin-top: 8px; padding: 0 8px; font-size: 12.5px; line-height: 1.35; color: var(--text-dim); }
+
+    .group { margin-top: 20px; border-radius: 14px; overflow: hidden; background: var(--elevated); }
+    .group-header { font-size: 13px; color: var(--text-dim); padding: 0 4px 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .row-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 16px; border-bottom: 1px solid var(--hairline); font-size: 15px;
+    }
+    .row-item:last-child { border-bottom: none; }
+    .row-item .v { font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+    .toggle {
+        width: 51px; height: 31px; border-radius: 999px; position: relative; cursor: pointer;
+        background: #39393d; transition: background 160ms ease; flex-shrink: 0; border: none;
+    }
+    .toggle.on { background: var(--green); }
+    .toggle .knob {
+        position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 999px;
+        background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: left 160ms ease;
+    }
+    .toggle.on .knob { left: 22px; }
+
+    .due-card {
+        margin-top: 16px; display: flex; align-items: center; justify-content: space-between;
+        background: var(--surface); border-radius: 18px; padding: 16px 20px;
+        box-shadow: inset 0 0 0 1px rgba(255,69,58,0.28);
+    }
+    .due-card .t { font-size: 13px; font-weight: 600; color: var(--red); }
+    .due-card .amt { margin-top: 2px; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .pay-btn {
+        border: none; border-radius: 999px; padding: 10px 24px; font-size: 16px; font-weight: 600;
+        background: var(--text); color: var(--bg); cursor: pointer;
+    }
+    .pay-btn:disabled { opacity: 0.5; }
+
+    .loading, .empty { margin-top: 40px; text-align: center; font-size: 15px; color: var(--text-dim); }
+
+    .sheet-backdrop {
+        position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: flex-end;
+        justify-content: center; z-index: 40;
+    }
+    .sheet {
+        width: 100%; max-width: 480px; background: var(--elevated); border-radius: 16px 16px 0 0;
+        padding: 20px 20px 32px;
+    }
+    .sheet-title { text-align: center; font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .plan-opt {
+        width: 100%; display: flex; align-items: center; justify-content: space-between;
+        background: var(--surface); border: none; border-radius: 14px; padding: 14px 16px;
+        margin-bottom: 10px; cursor: pointer; text-align: left; color: var(--text);
+    }
+    .plan-opt:disabled { opacity: 1; cursor: default; }
+    .plan-opt .name { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .plan-opt .meta { margin-top: 4px; display: flex; gap: 12px; font-size: 12.5px; color: var(--text-dim); }
+    .plan-opt .cost { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .plan-opt .cost span { font-size: 12px; font-weight: 400; color: var(--text-dim); }
+
+    .toast {
+        position: absolute; left: 16px; right: 16px; bottom: 24px; background: var(--elevated);
+        border-radius: 14px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        font-size: 14px; z-index: 50; text-align: center;
+    }
+</style>
+</head>
+<body data-theme="dark">
+<div id="app">
+    <div id="phone-col">
+        <div class="safe-top"></div>
+        <div class="title">Carrier</div>
+        <div class="scroll" id="scroll"></div>
+    </div>
+</div>
+<script>
+(function () {
+    var RESOURCE = 'sd_carrier';
+    var state = null;
+    var loaded = false;
+    var busy = false;
+    var pickingPlan = false;
+    var errMsg = null;
+
+    function post(endpoint, data) {
+        return fetch('https://' + RESOURCE + '/' + endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+            body: JSON.stringify(data || {}),
+        }).then(function (r) { return r.json(); }).catch(function () { return { ok: false, error: 'No response' }; });
+    }
+
+    function fmt(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); }
+    function fmtDate(ts) {
+        var d = new Date(ts * 1000);
+        return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    function statusLabel(s) {
+        if (s === 'suspended') return 'Suspended';
+        if (s === 'due') return 'Payment Due';
+        return 'Up to Date';
+    }
+    function statusColor(s) {
+        if (s === 'suspended') return 'var(--red)';
+        if (s === 'due') return 'var(--yellow)';
+        return 'var(--green)';
+    }
+
+    var RING_C = 2 * Math.PI * 27;
+    function ring(used, included, label, color) {
+        var unlimited = included < 0;
+        var pct = unlimited ? 100 : Math.min(100, included > 0 ? (used / included) * 100 : 100);
+        var ringColor = (!unlimited && pct >= 100) ? 'var(--red)' : color;
+        var offset = RING_C * (1 - pct / 100);
+        var sub = unlimited ? 'Unlimited' : (Math.round(used) + ' / ' + Math.round(included));
+        return '' +
+        '<div class="ring-card">' +
+            '<div class="ring-wrap">' +
+                '<svg viewBox="0 0 64 64">' +
+                    '<circle cx="32" cy="32" r="27" fill="none" stroke-width="7" stroke="var(--hairline)"/>' +
+                    '<circle cx="32" cy="32" r="27" fill="none" stroke-width="7" stroke-linecap="round" ' +
+                        'stroke="' + ringColor + '" stroke-dasharray="' + RING_C + '" stroke-dashoffset="' + offset + '" ' +
+                        'style="transition: stroke-dashoffset 300ms ease;"/>' +
+                '</svg>' +
+                '<div class="ring-pct">' + (unlimited ? '&#8734;' : Math.round(pct) + '%') + '</div>' +
+            '</div>' +
+            '<div class="ring-label">' + label + '</div>' +
+            '<div class="ring-sub">' + sub + '</div>' +
+        '</div>';
+    }
+
+    function render() {
+        var el = document.getElementById('scroll');
+        if (!loaded) { el.innerHTML = '<div class="loading">Loading&hellip;</div>'; return; }
+        if (!state) { el.innerHTML = '<div class="empty">Couldn\'t load your account.</div>'; return; }
+
+        var html = '';
+        if (state.status === 'suspended') {
+            html += '<div class="banner"><div class="icon">&#9888;</div><div>' +
+                '<div class="t">Service Suspended</div>' +
+                '<div class="b">Calls, texts and data are off until your bill is paid.</div>' +
+                '</div></div>';
+        }
+
+        html += '' +
+        '<button class="plan-card" id="planCardBtn">' +
+            '<div class="row">' +
+                '<div>' +
+                    '<div class="eyebrow">Current Plan</div>' +
+                    '<div class="label">' + state.plan.label + '</div>' +
+                    '<div class="pill"><span class="dot" style="background:' + statusColor(state.status) + '"></span>' + statusLabel(state.status) + '</div>' +
+                '</div>' +
+                '<div class="price"><div class="amt">' + fmt(state.plan.price) + '</div><div class="per">per cycle</div></div>' +
+            '</div>' +
+            '<div class="change">Change Plan &#8250;</div>' +
+        '</button>';
+
+        html += '<div class="rings">' +
+            ring(state.minutesUsed, state.plan.minutes, 'Minutes', 'var(--blue)') +
+            ring(state.textsUsed, state.plan.texts, 'Texts', 'var(--green)') +
+            ring(state.dataMBUsed, state.plan.dataMB, 'Data', 'var(--orange)') +
+        '</div>';
+        html += '<div class="hint">Data usage is an estimate based on how long you\'re on cellular, not exact bytes.</div>';
+
+        html += '<div class="group">' +
+            '<div class="row-item"><span>Estimated This Cycle</span><span class="v">' + fmt(state.estimatedThisCycle) + '</span></div>' +
+            '<div class="row-item"><span>Next Bill Date</span><span class="v">' + fmtDate(state.dueAt) + '</span></div>' +
+            '<div class="row-item"><span>Auto-Pay</span><button class="toggle' + (state.autoPay ? ' on' : '') + '" id="autoPayToggle"><span class="knob"></span></button></div>' +
+        '</div>';
+
+        if (state.balanceDue > 0) {
+            html += '<div class="due-card">' +
+                '<div><div class="t">Balance Due</div><div class="amt">' + fmt(state.balanceDue) + '</div></div>' +
+                '<button class="pay-btn" id="payBtn"' + (busy ? ' disabled' : '') + '>Pay Now</button>' +
+            '</div>';
+        }
+
+        if (state.history && state.history.length > 0) {
+            html += '<div class="group" style="margin-top:20px">';
+            state.history.forEach(function (h, i) {
+                html += '<div class="row-item"' + (i === state.history.length - 1 ? ' style="border-bottom:none"' : '') + '>' +
+                    '<div><div>' + fmtDate(h.cycleStart) + '</div><div style="font-size:12px;color:var(--text-dim);margin-top:2px">' + (h.paid ? 'Paid' : 'Unpaid') + '</div></div>' +
+                    '<span class="v">' + fmt(h.amount) + '</span>' +
+                '</div>';
+            });
+            html += '</div>';
+        }
+
+        el.innerHTML = html;
+
+        var planBtn = document.getElementById('planCardBtn');
+        if (planBtn) planBtn.onclick = function () { pickingPlan = true; renderSheet(); };
+        var toggle = document.getElementById('autoPayToggle');
+        if (toggle) toggle.onclick = toggleAutoPay;
+        var payBtn = document.getElementById('payBtn');
+        if (payBtn) payBtn.onclick = handlePay;
+
+        renderSheet();
+        renderToast();
+    }
+
+    function renderSheet() {
+        var existing = document.getElementById('sheetBackdrop');
+        if (existing) existing.remove();
+        if (!pickingPlan || !state) return;
+
+        var backdrop = document.createElement('div');
+        backdrop.className = 'sheet-backdrop';
+        backdrop.id = 'sheetBackdrop';
+        backdrop.onclick = function (e) { if (e.target === backdrop) { pickingPlan = false; renderSheet(); } };
+
+        var sheet = document.createElement('div');
+        sheet.className = 'sheet';
+        sheet.onclick = function (e) { e.stopPropagation(); };
+
+        var html = '<div class="sheet-title">Choose a Plan</div>';
+        state.plans.forEach(function (plan) {
+            var isCurrent = plan.id === state.plan.id;
+            html += '<button class="plan-opt" data-plan="' + plan.id + '"' + ((busy || isCurrent) ? ' disabled' : '') + '>' +
+                '<div>' +
+                    '<div class="name">' + plan.label + (isCurrent ? ' &#10003;' : '') + '</div>' +
+                    '<div class="meta">' +
+                        '<span>&#128222; ' + (plan.minutes < 0 ? 'Unlimited' : plan.minutes) + '</span>' +
+                        '<span>&#128172; ' + (plan.texts < 0 ? 'Unlimited' : plan.texts) + '</span>' +
+                        '<span>&#128225; ' + (plan.dataMB < 0 ? 'Unlimited' : (plan.dataMB / 1000).toFixed(1) + 'GB') + '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="cost">' + fmt(plan.price) + '<span>/cyc</span></div>' +
+            '</button>';
+        });
+        sheet.innerHTML = html;
+        backdrop.appendChild(sheet);
+        document.getElementById('phone-col').appendChild(backdrop);
+
+        Array.prototype.forEach.call(sheet.querySelectorAll('.plan-opt'), function (btn) {
+            btn.onclick = function () { selectPlan(btn.getAttribute('data-plan')); };
+        });
+    }
+
+    function renderToast() {
+        var existing = document.getElementById('toastEl');
+        if (existing) existing.remove();
+        if (!errMsg) return;
+        var toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.id = 'toastEl';
+        toast.textContent = errMsg;
+        document.getElementById('phone-col').appendChild(toast);
+        setTimeout(function () { errMsg = null; renderToast(); }, 3000);
+    }
+
+    function refresh() {
+        post('sd_carrier/status').then(function (res) {
+            state = (res && res.ok) ? res.data : null;
+            loaded = true;
+            render();
+        });
+    }
+
+    function handlePay() {
+        busy = true; render();
+        post('sd_carrier/payBill').then(function (res) {
+            busy = false;
+            if (!res || !res.ok) { errMsg = (res && res.error) || 'Payment failed'; render(); return; }
+            state = res.data; render();
+        });
+    }
+
+    function selectPlan(planId) {
+        busy = true; render();
+        post('sd_carrier/selectPlan', { planId: planId }).then(function (res) {
+            busy = false; pickingPlan = false;
+            if (!res || !res.ok) { errMsg = (res && res.error) || 'Failed to switch plans'; render(); return; }
+            state = res.data; render();
+        });
+    }
+
+    function toggleAutoPay() {
+        if (!state) return;
+        var next = !state.autoPay;
+        state = Object.assign({}, state, { autoPay: next });
+        render();
+        post('sd_carrier/setAutoPay', { on: next }).then(function (res) {
+            if (!res || !res.ok) { state = Object.assign({}, state, { autoPay: !next }); render(); }
+        });
+    }
+
+    // Data heartbeat: only while this page is visible (i.e. Carrier is the open, foreground app).
+    var heartbeatTimer = null;
+    function startHeartbeat(seconds) {
+        stopHeartbeat();
+        heartbeatTimer = setInterval(function () {
+            if (document.visibilityState !== 'visible') return;
+            post('sd_carrier/dataHeartbeat');
+        }, (seconds || 60) * 1000);
+    }
+    function stopHeartbeat() {
+        if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    }
+
+    var shown = false;
+    function showApp() {
+        if (shown) return;
+        shown = true;
+        // The documented reveal step: flip html/body visible now that sd-phone has actually
+        // framed and loaded this page inside the app - never before this fires.
+        document.documentElement.style.visibility = 'visible';
+        document.body.style.visibility = 'visible';
+        refresh();
+        post('sd_carrier/config').then(function (cfg) {
+            startHeartbeat((cfg && cfg.dataHeartbeatSeconds) || 60);
+        });
+    }
+
+    // sd-phone's own custom-app handshake: it posts the plain string 'componentsLoaded' to this
+    // page's window once - and only once - it has actually framed this file inside the phone's
+    // app view. This raw file's own top-level ui_page instance (the one FiveM loads unconditionally
+    // the moment the resource starts) never receives this message, so it stays invisible forever
+    // (per the html,body{visibility:hidden} rule above) and never calls showApp().
+    window.addEventListener('message', function (event) {
+        if (event.data === 'componentsLoaded') { showApp(); return; }
+        var data = event.data;
+        if (!data || typeof data !== 'object') return;
+        if (!shown) return;
+        if (data.action === 'sd_carrier:updated') { refresh(); return; }
+        if (data.action === 'sd-phone:theme' && data.theme) {
+            document.body.setAttribute('data-theme', data.theme);
+        }
+    });
+
+    document.addEventListener('visibilitychange', function () {
+        if (shown && document.visibilityState === 'visible') refresh();
+    });
+})();
+</script>
+</body>
+</html>
