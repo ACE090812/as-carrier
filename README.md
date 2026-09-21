@@ -1,108 +1,86 @@
-# sd_carrier
+# as-carrier (Aero Mobile)
 
-A standalone Carrier / phone-bill app, registered into sd-phone through its real, documented
-`addCustomApp` API. Nothing in sd-phone's own files is touched - this ships as its own resource
-with its own server logic, its own database tables, and its own NUI page.
+A Carrier / phone-plan app for sd-phone, registered through sd-phone's documented `addCustomApp` API.
+It ships as its own resource with its own server logic, database tables and NUI page. Two small edits to
+sd-phone (below) let it block calls, texts and data for phones with no plan or an unpaid bill; without them
+the app still tracks and bills everything but nothing is cut off.
 
 ## Setup
 
-1. Drop this folder into your resources as `sd_carrier`.
-2. Make sure `oxmysql` and `sd-phone` are both started before it (`ensure oxmysql`, `ensure sd-phone`,
-   then `ensure sd_carrier` - order matters for the `dependencies` in fxmanifest.lua to resolve).
-3. `Config.framework` in `config.lua` is `'auto'` by default (detects qbx_core / qb-core /
-   es_extended, falls back to standalone). Set it explicitly if you'd rather skip detection.
-4. `Config.payment.account` is `'bank'` by default - the account your framework's
-   `RemoveMoney`/`removeAccountMoney` charges Pay Now and auto-pay against.
-5. Restart the resource. The Carrier app appears in the App Store / home screen with no other
-   setup - `client/main.lua` registers it on start.
+1. Drop this folder into your resources as `as-carrier`.
+2. Start order: `ensure oxmysql`, `ensure ox_lib`, `ensure sd-phone`, then `ensure as-carrier`.
+3. `Config.framework` is `'auto'` (qbx_core / qb-core / es_extended, else standalone).
+4. `Config.payment.account` is `'bank'`: the account Pay now and auto-pay charge.
+5. Restart. The app appears in the App Store / home screen. On the first start after upgrading from the
+   old version, every existing account is reset (see "Existing players" below).
+6. Apply the two sd-phone edits below if you want plans to actually block service.
 
-## What it does
+## How plans work
 
-Real pay-monthly plans (SIM Only Lite / Basic / Standard / Unlimited by default, edit
-`Config.billing.plans` for your own), each with included minutes/texts/data and overage rates.
-Usage is tallied through a billing cycle (`Config.billing.cycleDays`, 28 by default) from:
+- **Players choose their own plan.** Nobody is put on a default plan. Until a player picks one, the app
+  shows a "Choose your plan" screen, and (with `Config.billing.requirePlan = true`) calls, texts and data
+  are blocked. Emergency and company lines always work, and nothing is metered or billed until a plan is
+  chosen. The first time a phone is opened without a plan the player gets a notification pointing at the app.
+- **The plan is locked for the cycle** (`Config.billing.planLock = true`). Choosing another plan doesn't
+  change anything now: the switch is queued for the next bill, shown on the Overview and Plans tabs, and can
+  be cancelled until then. The bill for the cycle that just ended is always for the plan the cycle was on.
+  With `planLock = false` plans change immediately.
+- **Plans belong to the SIM, not the character** (`Config.accountBy`). With sd-phone's SIM mode
+  (`DataOwner = 'sim'`) each SIM has its own plan, usage and bill. Whoever has the SIM in their phone owes
+  its bill and can pay it. Putting a different SIM in starts with no plan; the old SIM keeps its plan and any
+  unpaid bill, and picks up again when it goes back in. `'character'` keeps one account per character,
+  whatever SIM they use, and is only right for stock sd-phone. Do not use it while sd-phone is in SIM mode
+  (the resource prints a warning if you do). `'auto'` (default) picks SIM accounts whenever sd-phone's SIM
+  mode is on.
+- **Usage and billing.** Included minutes / texts / data per plan, overage rates per unit after that
+  (`Config.billing.plans`), a `Config.billing.cycleDays` cycle (28). Calls come from sd-phone's
+  `sd-phone:server:call:ended` (rounded up to whole minutes), texts from `sd-phone:server:messages:sent`,
+  data is an estimate from the app's own heartbeat while it is open on mobile data (not a byte counter).
+- **Bills and suspension.** At the end of a cycle a bill is raised for the plan plus overage. Auto-pay
+  (opt-in) charges the account on the due date; otherwise the player pays in the app. A bill unpaid for
+  `Config.billing.graceDays` suspends the account, and paying restores it straight away. A server thread
+  (`Config.billing.sweepSeconds`, 60) rolls cycles over, raises bills, auto-pays and suspends for online
+  players, so it doesn't wait for the app to be opened.
+- **Currency** is `Config.currency` (default `£`), used in the app and in notifications.
 
-- **Calls** - hooks sd-phone's own `sd-phone:server:call:ended` event (fired natively for every
-  call), rounding each call's duration up to the next whole minute.
-- **Texts** - hooks sd-phone's own `sd-phone:server:messages:sent` event (fired natively for
-  every message actually sent), one count per text.
-- **Data** - a simulated heartbeat from the app's own NUI page, while it's the open, foreground
-  app (`Config.billing.dataHeartbeatSeconds` / `dataPerHeartbeatMB`). This is an estimate, not a
-  byte counter - same approach a lot of phone scripts use, since nothing meters what each app
-  actually sends.
+### Existing players
 
-At the end of a cycle a bill is raised for the plan price plus any overage. Auto-pay (opt-in,
-per player) tries to charge the configured account on the due date; otherwise the player pays by
-hand from the app. An unpaid bill past `Config.billing.graceDays` marks the account `suspended`.
+The first start after upgrading adds the plan columns and resets every existing account: everyone has to
+choose a plan again, usage from the old cycle is dropped, unpaid balances are kept. Old accounts were keyed
+by character; in SIM mode the new accounts are keyed by SIM, so an old unpaid balance only follows a SIM that
+was character-bound (its identity is the citizenid). Everyone else starts fresh.
 
-## Known limitations (optional edits below turn both of these on)
+With `requirePlan = true`, every player is blocked from calls and texts until they pick a plan. Tell your
+players before you restart.
 
-- **Suspension doesn't block calls/texts/data - unless you add the edit below.** sd-phone's own
-  `server/service.lua` is the single gate calls, texts, and data downloads run through, and out
-  of the box it doesn't know this resource exists. This resource always tracks and displays
-  suspension for real (the app shows "Service Suspended" and stops looking current) and fires
-  `sd_carrier:accountSuspended` / `sd_carrier:accountRestored` server events either way.
-- **App Store downloads aren't metered against data - unless you add the other edit below.**
-  There's no public event fired around a download that a separate resource can hook, so out of
-  the box `sd_carrier` only meters data from calls, texts, and the in-app heartbeat.
+## sd-phone edits
 
-These are the only two pieces of sd-phone's own files this app ever needs touched; everything
-else in this README ships with zero core edits.
+### `server/service.lua`: block service for a phone with no plan or a suspended bill
 
-### Optional: make suspension actually cut off service
+`as-carrier` exports `getBlockReason(key)` (`'suspended'`, `'no_plan'` or nil), a table lookup, not a query.
+`service.blockedByPlan(source)` calls `exports['as-carrier']:getBlockReason(player.getIdentifier(source))`, and
+`service.allows(source, capability, ignorePlan)` returns false when it is blocked unless `ignorePlan` is true.
+This replaces the earlier `as_carrier` block in `service.allows`; that used the resource name `as_carrier`,
+which never matched `as-carrier`, so it never blocked anything.
 
-`sd_carrier` exports `isSuspendedCached(cid)` (see `server/main.lua`) - a cheap table lookup, not
-a query. To wire it up, open sd-phone's `server/service.lua` and find
-`function service.allows(source, capability)`:
+### `server/calls/actions.lua`: emergency and company lines still connect
 
-```lua
-function service.allows(source, capability)
-    if #TOWERS == 0 then return true end
-    if celltowers.allows(service.levelFor(source), capability, THRESHOLDS) then return true end
-    return wifiServer.provides(source, capability)
-end
-```
-
-Replace it with:
-
-```lua
-function service.allows(source, capability)
-    if source then
-        local cid = player.getIdentifier(source)
-        if cid and GetResourceState('sd_carrier') == 'started' then
-            local resOk, isSuspended = pcall(function()
-                return exports['sd_carrier']:isSuspendedCached(cid)
-            end)
-            if resOk and isSuspended then return false end
-        end
-    end
-
-    if #TOWERS == 0 then return true end
-    if celltowers.allows(service.levelFor(source), capability, THRESHOLDS) then return true end
-    return wifiServer.provides(source, capability)
-end
-```
-
-No new `require` is needed - `player` (for `player.getIdentifier`) is already required near the
-top of `service.lua`.
+`actions.dial` checks `service.allows(source, 'call', true)` (coverage only) first and the plan block
+(`service.blockedByPlan`) after the emergency/company lookup, so 999 and company lines work with no plan.
+`actions.callGroup` and the in-call coverage sweep (`legHasSignal`, for sessions that have `s.company`) ignore
+the plan block the same way. Player-to-player calls and texts stay blocked.
 
 ### Optional: make downloads cost data too
 
-`sd_carrier` exports `tryConsumeDownloadData(source, sizeMB)` (see `server/main.lua`), returning
-`{ success, message }`. To wire it up, open sd-phone's `server/apps/actions.lua` and find this
-line inside `actions.install` (under the off-Wi-Fi branch):
-
-```lua
-local sizeMB = tonumber(def and def.sizeMB) or 35
-```
-
-Add this right after it:
+`as-carrier` exports `tryConsumeDownloadData(source, sizeMB)` returning `{ success, message }`. In sd-phone's
+`server/apps/actions.lua`, inside `actions.install` (the off-Wi-Fi branch), right after
+`local sizeMB = tonumber(def and def.sizeMB) or 35`, add:
 
 ```lua
 local dataResult = { success = true }
-if GetResourceState('sd_carrier') == 'started' then
+if GetResourceState('as-carrier') == 'started' then
     local resOk, result = pcall(function()
-        return exports['sd_carrier']:tryConsumeDownloadData(source, sizeMB)
+        return exports['as-carrier']:tryConsumeDownloadData(source, sizeMB)
     end)
     dataResult = (resOk and type(result) == 'table') and result or { success = true }
 end
@@ -118,17 +96,30 @@ if not dataResult.success then
 end
 ```
 
-Downloads simply aren't charged against data if `sd_carrier` isn't installed/started - same as
-always being on Wi-Fi.
+## Events and exports
+
+Server events: `sd_carrier:accountSuspended`, `sd_carrier:accountRestored`.
+Exports: `getBlockReason(key)`, `isSuspendedCached(key)`, `tryConsumeDownloadData(source, sizeMB)`.
+
+## Languages
+
+Every text the script shows (phone notifications, errors and all of the app's screens) lives in
+`locales/en.lua`. Set `Config.locale` to switch. To add one, copy `locales/en.lua` to `locales/<code>.lua`
+(e.g. `de.lua`), translate the values only (keep the keys and the `%s` placeholders, in the same order),
+change `Locales['en']` to `Locales['<code>']` and set `Config.locale = '<code>'`. Any missing key falls back to
+English. Not in the locale files, because it is owner-editable text in `config.lua`: the app name and
+description (`Config.app`) and the plan names (`Config.billing.plans[].label`). The month names used in dates
+are one comma-separated key, `ui.months`.
 
 ## Files
 
-- `config.lua` - framework, payment account, app identity, plans and cycle timing.
-- `server/bridge.lua` - framework detection (qb/qbx/esx/standalone) for identifiers and money.
-- `server/store.lua` - MySQL persistence (`sd_carrier_accounts` / `sd_carrier_history` - its own
-  tables, never shared with sd-phone's own schema).
-- `server/main.lua` - the billing logic: cycle rollover, invoicing, pay/auto-pay, usage hooks.
-- `client/main.lua` - registers the app with sd-phone and bridges its NUI page to the callbacks.
-- `ui/index.html` - the app's whole screen: plan card, usage rings, account/history lists, plan
-  picker. Self-contained (no build step, no framework) since it renders in its own iframe,
-  separate from sd-phone's own React app.
+- `config.lua`: language, framework, account mode, currency, payment account, app identity, plans, cycle and lock.
+- `locales/en.lua`, `shared/locale.lua`: language strings and the `T()` helper.
+- `server/bridge.lua`: framework detection (qb / qbx / esx / standalone) for identifiers and money.
+- `server/store.lua`: MySQL persistence (`sd_carrier_accounts`, `sd_carrier_history`; its own tables). The
+  `citizenid` column holds the account key (SIM identity, or a character's citizenid).
+- `server/main.lua`: account lookup by SIM, the service gate, cycle rollover, invoicing, pay / auto-pay,
+  usage hooks, the sweep thread.
+- `client/main.lua`: registers the app with sd-phone and bridges its NUI page to the server callbacks.
+- `ui/index.html`: the whole app screen (Overview, Plans, Bills, plan choice). One self-contained file,
+  no build step, follows the phone's light / dark theme.

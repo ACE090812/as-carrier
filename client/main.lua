@@ -8,12 +8,19 @@ CreateThread(function()
         ui = GetCurrentResourceName() .. '/ui/index.html',
     })
     if not ok then
-        print(('[sd_carrier] failed to register the Carrier app with sd-phone: %s'):format(tostring(err)))
+        print(('[as-carrier] failed to register the Carrier app with sd-phone: %s'):format(tostring(err)))
     end
 end)
 
+RegisterNUICallback('sd_carrier/locale', function(_, cb)
+    cb(LocaleDict())
+end)
+
 RegisterNUICallback('sd_carrier/config', function(_, cb)
-    cb({ dataHeartbeatSeconds = Config.billing.dataHeartbeatSeconds or 60 })
+    cb({
+        dataHeartbeatSeconds = Config.billing.dataHeartbeatSeconds or 60,
+        currency = Config.currency or '£',
+    })
 end)
 
 RegisterNUICallback('sd_carrier/status', function(_, cb)
@@ -22,6 +29,10 @@ end)
 
 RegisterNUICallback('sd_carrier/selectPlan', function(data, cb)
     cb(lib.callback.await('sd_carrier:selectPlan', false, data))
+end)
+
+RegisterNUICallback('sd_carrier/cancelPending', function(_, cb)
+    cb(lib.callback.await('sd_carrier:cancelPending', false))
 end)
 
 RegisterNUICallback('sd_carrier/setAutoPay', function(data, cb)

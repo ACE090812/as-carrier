@@ -1,33 +1,44 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Aero Mobile</title>
 <style>
     :root {
-        --bg: #ffffff;
+        --bg: #f2f2f7;
         --text: #000000;
-        --text-dim: #8e8e93;
-        --surface: #f2f2f7;
-        --elevated: #ffffff;
-        --hairline: rgba(0,0,0,0.08);
+        --dim: #8a8a8e;
+        --soft: #48484a;
+        --card: #ffffff;
+        --card2: #f2f2f7;
+        --line: rgba(0,0,0,0.08);
+        --track: #e5e5ea;
+        --btn-bg: #000000;
+        --btn-fg: #ffffff;
+        --accent: #0a6cff;
         --red: #ff453a;
         --yellow: #ffd60a;
         --green: #30d158;
         --blue: #0a84ff;
         --orange: #ff9f0a;
+        --shadow: rgba(0,0,0,0.12);
     }
     body[data-theme="dark"] {
         --bg: #000000;
         --text: #ffffff;
-        --text-dim: #8e8e93;
-        --surface: #1c1c1e;
-        --elevated: #1c1c1e;
-        --hairline: rgba(255,255,255,0.10);
+        --dim: #8e8e93;
+        --soft: #c7c7cc;
+        --card: #1c1c1e;
+        --card2: #2c2c2e;
+        --line: rgba(255,255,255,0.08);
+        --track: #2a2a2e;
+        --btn-bg: #ffffff;
+        --btn-fg: #000000;
+        --accent: #4d8dff;
+        --shadow: rgba(0,0,0,0.5);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
         visibility: hidden;
@@ -35,376 +46,601 @@
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
         overflow: hidden;
     }
+    button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+    button:disabled { opacity: .5; cursor: default; }
+    .num { font-variant-numeric: tabular-nums; }
+    .ic { width: 1em; height: 1em; vertical-align: -0.125em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-    #app {
-        position: absolute; inset: 0; display: flex; justify-content: center;
-        background: var(--bg);
-    }
-    #phone-col {
-        position: relative;
-        width: 100%; max-width: 430px; height: 100%; max-height: 932px;
-        display: flex; flex-direction: column; background: var(--bg);
-    }
+    #app { position: absolute; inset: 0; display: flex; justify-content: center; background: var(--bg); }
+    #col { position: relative; width: 100%; max-width: 430px; height: 100%; max-height: 932px; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
     .safe-top { height: 54px; flex-shrink: 0; }
-    .title { padding: 0 20px 8px; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
-    .brand-row { padding: 0 20px 8px; display: flex; align-items: center; gap: 10px; }
-    .brand-row .brand-icon { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; }
-    .brand-row .brand-name { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-    .scroll { flex: 1; overflow-y: auto; padding: 8px 16px 40px; -ms-overflow-style: none; scrollbar-width: none; }
+    .head { padding: 0 20px 6px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .logo { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; display: block; }
+    .head b { font-size: 24px; letter-spacing: -.02em; }
+    .ttl { padding: 0 20px 4px; font-size: 32px; font-weight: 800; letter-spacing: -.03em; flex-shrink: 0; }
+    .sub { padding: 0 20px 2px; font-size: 13.5px; color: var(--dim); line-height: 1.4; flex-shrink: 0; }
+    .scroll { flex: 1; overflow-y: auto; padding: 10px 16px 28px; -ms-overflow-style: none; scrollbar-width: none; }
     .scroll::-webkit-scrollbar { display: none; }
+    .cap { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; padding: 18px 6px 8px; font-weight: 600; }
+    .hint { font-size: 11.5px; color: var(--dim); padding: 10px 6px 0; line-height: 1.4; }
+    .loading, .empty { text-align: center; color: var(--dim); padding: 80px 20px; font-size: 15px; }
 
-    .banner {
-        display: flex; gap: 10px; align-items: flex-start;
-        background: rgba(255,69,58,0.10); border-radius: 14px; padding: 12px 16px; margin-bottom: 16px;
-    }
-    .banner .icon { color: var(--red); font-size: 18px; line-height: 1; margin-top: 2px; }
-    .banner .t { font-size: 15px; font-weight: 600; color: var(--red); }
-    .banner .b { font-size: 13px; color: var(--red); opacity: 0.8; margin-top: 2px; line-height: 1.35; }
+    /* hero plan card */
+    .hero { border-radius: 24px; padding: 18px; color: #fff; position: relative; overflow: hidden; background: linear-gradient(140deg,#2f6bff 0%,#1b47c9 55%,#102a7e 100%); box-shadow: 0 14px 28px rgba(27,71,201,.32); }
+    .hero.warn { background: linear-gradient(140deg,#ff8a3d 0%,#e2531b 55%,#9c2f0a 100%); box-shadow: 0 14px 28px rgba(226,83,27,.28); }
+    .hero.bad { background: linear-gradient(140deg,#ff5a52 0%,#c62828 55%,#7a1010 100%); box-shadow: 0 14px 28px rgba(198,40,40,.28); }
+    .hero::after { content: ""; position: absolute; right: -40px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.28), transparent 65%); pointer-events: none; }
+    .hero .eb { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; opacity: .75; font-weight: 700; }
+    .hero .pl { font-size: 27px; font-weight: 800; margin-top: 2px; }
+    .hero .pr { position: absolute; right: 18px; top: 18px; text-align: right; z-index: 1; }
+    .hero .pr b { font-size: 23px; }
+    .hero .pr small { display: block; font-size: 11px; opacity: .75; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; background: rgba(255,255,255,.17); padding: 4px 11px 4px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+    .pill i { width: 7px; height: 7px; border-radius: 50%; background: #30d158; }
+    .pill.y i { background: #ffd60a; }
+    .pill.r i { background: #fff; }
+    .cyc { margin-top: 18px; position: relative; z-index: 1; }
+    .cyc .t { display: flex; justify-content: space-between; font-size: 12px; opacity: .88; margin-bottom: 6px; gap: 8px; }
+    .bar { height: 6px; border-radius: 9px; background: rgba(255,255,255,.22); overflow: hidden; }
+    .bar i { display: block; height: 100%; background: #fff; border-radius: 9px; transition: width .4s ease; }
 
-    .plan-card {
-        position: relative; width: 100%; border-radius: 22px; padding: 20px 20px 18px;
-        color: #fff; text-align: left; border: none; cursor: pointer;
-        background: linear-gradient(135deg, #2b6cff 0%, #1746c9 60%, #0d2c8a 100%);
-        box-shadow: 0 12px 24px rgba(23,70,201,0.35);
-        overflow: hidden;
-    }
-    .plan-card::before {
-        content: ""; position: absolute; inset: 0; pointer-events: none;
-        background: radial-gradient(circle at 85% -10%, rgba(255,255,255,0.25), transparent 55%);
-    }
-    .plan-card .row { position: relative; display: flex; align-items: flex-start; justify-content: space-between; }
-    .plan-card .eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.75); }
-    .plan-card .label { margin-top: 2px; font-size: 24px; font-weight: 800; }
-    .plan-card .pill {
-        margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;
-        background: rgba(255,255,255,0.16); border-radius: 999px; padding: 4px 10px 4px 8px;
-        font-size: 13px; font-weight: 600;
-    }
-    .plan-card .dot { width: 7px; height: 7px; border-radius: 999px; }
-    .plan-card .price { text-align: right; }
-    .plan-card .price .amt { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .plan-card .price .per { font-size: 11px; color: rgba(255,255,255,0.75); }
-    .plan-card .change {
-        position: relative; margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 6px;
-        background: rgba(255,255,255,0.14); border-radius: 14px; padding: 10px; font-size: 14px; font-weight: 600;
-    }
+    /* banners */
+    .banner { display: flex; gap: 10px; border-radius: 16px; padding: 12px 14px; margin-bottom: 12px; align-items: flex-start; }
+    .banner.red { background: rgba(255,69,58,.14); color: var(--red); }
+    .banner.blue { background: rgba(10,132,255,.13); color: var(--accent); }
+    .banner > svg { width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+    .banner b { font-size: 14px; display: block; }
+    .banner span { font-size: 12.5px; opacity: .88; line-height: 1.35; display: block; margin-top: 2px; }
+    .banner .lnk { margin-top: 6px; font-size: 13px; font-weight: 700; color: inherit; text-decoration: underline; }
+    .banner .tx { flex: 1; }
 
-    .rings { margin-top: 16px; display: flex; gap: 12px; }
-    .ring-card { flex: 1; display: flex; flex-direction: column; align-items: center; background: var(--surface); border-radius: 18px; padding: 14px 10px; }
-    .ring-wrap { position: relative; width: 64px; height: 64px; }
-    .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .ring-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
-    .ring-label { margin-top: 8px; font-size: 12px; font-weight: 600; }
-    .ring-sub { margin-top: 2px; font-size: 11px; color: var(--text-dim); }
+    /* due card */
+    .due { margin-top: 12px; display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: 20px; padding: 14px 16px; box-shadow: inset 0 0 0 1px rgba(255,69,58,.35); gap: 10px; }
+    .due .t { font-size: 12px; font-weight: 600; color: var(--red); }
+    .due .a { font-size: 28px; font-weight: 800; margin-top: 1px; }
+    .due .s { font-size: 12px; color: var(--dim); margin-top: 2px; }
+    .btn { border-radius: 99px; padding: 11px 22px; font-size: 15px; font-weight: 700; background: var(--btn-bg); color: var(--btn-fg); white-space: nowrap; }
+    .btn.blue { background: #0a84ff; color: #fff; }
+    .btn.full { display: block; width: 100%; text-align: center; border-radius: 16px; padding: 15px; }
 
-    .hint { margin-top: 8px; padding: 0 8px; font-size: 12.5px; line-height: 1.35; color: var(--text-dim); }
+    /* rings */
+    .rings { display: flex; gap: 10px; margin-top: 12px; }
+    .rc { flex: 1; background: var(--card); border-radius: 20px; padding: 14px 6px 12px; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+    .rw { position: relative; width: 62px; height: 62px; }
+    .rw svg.r { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .rw .in { position: absolute; inset: 0; display: grid; place-items: center; }
+    .rw .in svg { width: 20px; height: 20px; }
+    .rc b { font-size: 13px; margin-top: 8px; }
+    .rc small { font-size: 11px; color: var(--dim); margin-top: 2px; text-align: center; }
+    .rc small.o { color: var(--orange); font-weight: 600; }
 
-    .group { margin-top: 20px; border-radius: 14px; overflow: hidden; background: var(--elevated); }
-    .group-header { font-size: 13px; color: var(--text-dim); padding: 0 4px 6px; text-transform: uppercase; letter-spacing: 0.03em; }
-    .row-item {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 12px 16px; border-bottom: 1px solid var(--hairline); font-size: 15px;
-    }
-    .row-item:last-child { border-bottom: none; }
-    .row-item .v { font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-    .toggle {
-        width: 51px; height: 31px; border-radius: 999px; position: relative; cursor: pointer;
-        background: #39393d; transition: background 160ms ease; flex-shrink: 0; border: none;
-    }
-    .toggle.on { background: var(--green); }
-    .toggle .knob {
-        position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 999px;
-        background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: left 160ms ease;
-    }
-    .toggle.on .knob { left: 22px; }
+    /* lists */
+    .list { margin-top: 12px; background: var(--card); border-radius: 20px; overflow: hidden; }
+    .li { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; font-size: 14.5px; border-bottom: 1px solid var(--line); gap: 10px; }
+    .li:last-child { border: 0; }
+    .li .mut { color: var(--dim); }
+    .li .l2 small { display: block; color: var(--dim); font-size: 12px; margin-top: 2px; }
+    .tog { width: 48px; height: 29px; border-radius: 99px; background: var(--track); position: relative; flex-shrink: 0; transition: background .2s; }
+    .tog::after { content: ""; position: absolute; left: 2px; top: 2px; width: 25px; height: 25px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px var(--shadow); transition: transform .2s; }
+    .tog.on { background: #30d158; }
+    .tog.on::after { transform: translateX(19px); }
 
-    .due-card {
-        margin-top: 16px; display: flex; align-items: center; justify-content: space-between;
-        background: var(--surface); border-radius: 18px; padding: 16px 20px;
-        box-shadow: inset 0 0 0 1px rgba(255,69,58,0.28);
-    }
-    .due-card .t { font-size: 13px; font-weight: 600; color: var(--red); }
-    .due-card .amt { margin-top: 2px; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .pay-btn {
-        border: none; border-radius: 999px; padding: 10px 24px; font-size: 16px; font-weight: 600;
-        background: var(--text); color: var(--bg); cursor: pointer;
-    }
-    .pay-btn:disabled { opacity: 0.5; }
+    /* plans */
+    .plan { background: var(--card); border-radius: 22px; padding: 15px 16px; margin-bottom: 10px; position: relative; display: block; width: 100%; text-align: left; }
+    .plan.cur { box-shadow: inset 0 0 0 2px #2f6bff; background: linear-gradient(180deg, rgba(47,107,255,.14), var(--card) 60%); }
+    .plan.next { box-shadow: inset 0 0 0 2px #30d158; }
+    .plan .h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .plan .h b { font-size: 17px; }
+    .plan .h .p { font-size: 21px; font-weight: 800; white-space: nowrap; }
+    .plan .h .p small { font-size: 12px; color: var(--dim); font-weight: 500; }
+    .tag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; margin-left: 8px; vertical-align: 2px; }
+    .tag.cur { background: #2f6bff; color: #fff; }
+    .tag.pop { background: rgba(48,209,88,.18); color: #22a848; }
+    .tag.next { background: #30d158; color: #003b12; }
+    .feat { display: flex; gap: 14px; margin-top: 10px; font-size: 12.5px; color: var(--soft); flex-wrap: wrap; }
+    .feat span { display: flex; align-items: center; gap: 5px; }
+    .feat svg { width: 14px; height: 14px; color: var(--dim); }
+    .plan .ov { margin-top: 8px; font-size: 11.5px; color: var(--dim); line-height: 1.4; }
+    .go { margin-top: 11px; text-align: center; font-size: 13.5px; font-weight: 700; color: var(--accent); background: rgba(77,141,255,.12); padding: 10px; border-radius: 12px; display: block; width: 100%; }
+    .go.grey { color: var(--soft); background: var(--card2); }
 
-    .loading, .empty { margin-top: 40px; text-align: center; font-size: 15px; color: var(--text-dim); }
+    /* bills */
+    .sum { background: var(--card); border-radius: 22px; padding: 16px; }
+    .sum .big { font-size: 38px; font-weight: 800; letter-spacing: -.03em; }
+    .sum .lbl { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+    .sum .split { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .sum .split div { display: flex; justify-content: space-between; font-size: 13.5px; padding: 3px 0; gap: 10px; }
+    .sum .split div span:last-child { color: var(--soft); }
+    .sum .split div.z span:last-child { color: #22a848; }
+    .bill { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; width: 100%; text-align: left; }
+    .bill:last-child { border: 0; }
+    .bill .ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(48,209,88,.15); color: #22a848; flex-shrink: 0; }
+    .bill .ico.u { background: rgba(255,69,58,.15); color: var(--red); }
+    .bill .ico svg { width: 17px; height: 17px; }
+    .bill .m { flex: 1; font-size: 14px; font-weight: 600; min-width: 0; }
+    .bill .m small { display: block; font-size: 12px; color: var(--dim); font-weight: 400; margin-top: 2px; }
+    .bill .r { text-align: right; font-size: 14px; font-weight: 700; }
+    .bill .r small { display: block; font-size: 11px; color: #22a848; font-weight: 600; margin-top: 2px; }
+    .bill .r small.u { color: var(--red); }
+    .bill .det { flex-basis: 100%; margin-left: 46px; font-size: 12.5px; color: var(--soft); }
+    .bill .det div { display: flex; justify-content: space-between; padding: 2px 0; }
+    .none { padding: 26px 16px; text-align: center; font-size: 13.5px; color: var(--dim); }
 
-    .sheet-backdrop {
-        position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: flex-end;
-        justify-content: center; z-index: 40;
-    }
-    .sheet {
-        width: 100%; max-width: 480px; background: var(--elevated); border-radius: 16px 16px 0 0;
-        padding: 20px 20px 32px;
-    }
-    .sheet-title { text-align: center; font-size: 15px; font-weight: 600; margin-bottom: 16px; }
-    .plan-opt {
-        width: 100%; display: flex; align-items: center; justify-content: space-between;
-        background: var(--surface); border: none; border-radius: 14px; padding: 14px 16px;
-        margin-bottom: 10px; cursor: pointer; text-align: left; color: var(--text);
-    }
-    .plan-opt:disabled { opacity: 1; cursor: default; }
-    .plan-opt .name { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
-    .plan-opt .meta { margin-top: 4px; display: flex; gap: 12px; font-size: 12.5px; color: var(--text-dim); }
-    .plan-opt .cost { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .plan-opt .cost span { font-size: 12px; font-weight: 400; color: var(--text-dim); }
+    /* onboarding */
+    .welcome { padding: 4px 4px 4px; }
+    .note { display: flex; gap: 10px; align-items: flex-start; background: var(--card); border-radius: 16px; padding: 12px 14px; margin: 8px 0 14px; font-size: 12.5px; color: var(--soft); line-height: 1.4; }
+    .note svg { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 
-    .toast {
-        position: absolute; left: 16px; right: 16px; bottom: 24px; background: var(--elevated);
-        border-radius: 14px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        font-size: 14px; z-index: 50; text-align: center;
-    }
+    /* tab bar */
+    .tabs { display: flex; justify-content: space-around; padding: 10px 0 22px; border-top: 1px solid var(--line); background: var(--bg); flex-shrink: 0; }
+    .tabs button { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--dim); position: relative; padding: 0 22px; font-weight: 500; }
+    .tabs button.on { color: var(--accent); }
+    .tabs svg { width: 23px; height: 23px; }
+    .tabs .badge { position: absolute; top: -2px; right: 16px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); border: 2px solid var(--bg); box-sizing: content-box; }
+
+    /* sheet */
+    .dim { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 20; animation: fade .2s; }
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 26px 26px 0 0; padding: 10px 18px 30px; z-index: 21; animation: up .25s ease; }
+    .sheet .grab { width: 38px; height: 5px; border-radius: 9px; background: var(--track); margin: 0 auto 14px; }
+    .sheet h3 { font-size: 19px; text-align: center; margin: 0; }
+    .sheet p { font-size: 13px; color: var(--dim); text-align: center; margin: 6px 0 0; line-height: 1.45; }
+    .cmp { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 16px 0; }
+    .cmp > div { flex: 1; background: var(--card2); border-radius: 16px; padding: 12px; text-align: center; min-width: 0; }
+    .cmp > div b { display: block; font-size: 15px; }
+    .cmp > div small { display: block; font-size: 12px; color: var(--dim); margin-top: 3px; }
+    .cmp > div.n { box-shadow: inset 0 0 0 2px #2f6bff; }
+    .cmp .ar { flex: 0 0 auto; background: none; padding: 0; color: var(--dim); }
+    .cmp .ar svg { width: 20px; height: 20px; }
+    .sheet .cancel { display: block; width: 100%; text-align: center; margin-top: 14px; font-size: 15px; color: var(--accent); font-weight: 600; }
+
+    .toast { position: absolute; left: 20px; right: 20px; bottom: 96px; background: #2c2c2e; color: #fff; padding: 12px 16px; border-radius: 14px; font-size: 13.5px; text-align: center; z-index: 30; box-shadow: 0 8px 24px var(--shadow); animation: fade .2s; }
+    .toast.err { background: #d92d20; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes up { from { transform: translateY(100%); } to { transform: none; } }
 </style>
 </head>
 <body data-theme="dark">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-data" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14 0M1.4 9a16 16 0 0 1 21.2 0M8.5 16.1a6 6 0 0 1 7 0M12 20h.01"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></symbol>
+    <symbol id="i-bill" viewBox="0 0 24 24"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></symbol>
+    <symbol id="i-plan" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 10h18"/></symbol>
+    <symbol id="i-sig" viewBox="0 0 24 24"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  </defs>
+</svg>
 <div id="app">
-    <div id="phone-col">
-        <div class="safe-top"></div>
-        <div class="brand-row">
-            <img class="brand-icon" src="header-icon.png" alt="Aero Mobile">
-            <span class="brand-name">Aero Mobile</span>
-        </div>
-        <div class="scroll" id="scroll"></div>
-    </div>
+    <div id="col"></div>
 </div>
 <script>
 (function () {
     var RESOURCE = 'as-carrier';
-    var state = null;
+    var S = null;              // last status from the server
     var loaded = false;
+    var tab = 'overview';      // overview | plans | bills
+    var sheet = null;          // { kind: 'start' | 'switch', planId }
     var busy = false;
-    var pickingPlan = false;
-    var errMsg = null;
+    var openBill = null;       // history id whose breakdown is open
+    var toast = null;          // { text, err }
+    var toastTimer = null;
+    var cur = '£';
+    var DICT = {};             // translations from locales/<code>.lua; English below is the fallback
 
     function post(endpoint, data) {
         return fetch('https://' + RESOURCE + '/' + endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json; charset=UTF-8' },
             body: JSON.stringify(data || {}),
-        }).then(function (r) { return r.json(); }).catch(function () { return { ok: false, error: 'No response' }; });
+        }).then(function (r) { return r.json(); }).catch(function () { return { ok: false, error: L('err.noResponse', 'No response') }; });
     }
 
-    function fmt(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); }
-    function fmtDate(ts) {
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    // L(key, english, ...args): the language file's text for `key`, else the English default. Each %s is
+    // filled with the next argument (HTML-escaped). The keys and English live in locales/en.lua.
+    function L(key, def) {
+        var s = DICT[key];
+        if (s == null) s = def;
+        var args = Array.prototype.slice.call(arguments, 2), i = 0;
+        return String(s).replace(/%s/g, function () {
+            var a = args[i++];
+            return (a && a.raw != null) ? a.raw : esc(a);   // raw(): text that is already HTML-safe
+        });
+    }
+    function raw(x) { return { raw: x }; }
+    function icon(id) { return '<svg class="ic"><use href="#' + id + '"/></svg>'; }
+
+    function fmt(n) { return cur + (Math.round((n || 0) * 100) / 100).toFixed(2); }
+    function fmtPrice(n) { return cur + (Math.round(n * 100) / 100 === Math.round(n) ? String(Math.round(n)) : (Math.round(n * 100) / 100).toFixed(2)); }
+    function fmtRate(r) {
+        if (cur === '£' && r < 1) return L('ui.pence', '%sp', Math.round(r * 1000) / 10);
+        return cur + (Math.round(r * 1000) / 1000);
+    }
+    function day(ts) {
+        var months = L('ui.months', 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec').split(',');
         var d = new Date(ts * 1000);
-        return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+        return d.getDate() + ' ' + (months[d.getMonth()] || '');
+    }
+    function mbText(mb) {
+        if (mb >= 1000) return L('ui.gb', '%s GB', Math.round(mb / 100) / 10);
+        return L('ui.mb', '%s MB', Math.round(mb));
+    }
+    function unl(v, kind) {
+        if (v < 0) return L('ui.unlimited', 'Unlimited');
+        if (kind === 'data') return mbText(v);
+        return kind === 'min' ? L('ui.nMin', '%s min', v) : L('ui.nTexts', '%s texts', v);
     }
 
     function statusLabel(s) {
-        if (s === 'suspended') return 'Suspended';
-        if (s === 'due') return 'Payment Due';
-        return 'Up to Date';
+        return s === 'suspended' ? L('status.suspended', 'Suspended') : (s === 'due' ? L('status.due', 'Payment due') : L('status.current', 'Up to date'));
     }
-    function statusColor(s) {
-        if (s === 'suspended') return 'var(--red)';
-        if (s === 'due') return 'var(--yellow)';
-        return 'var(--green)';
-    }
+    function heroClass(s) { return s === 'suspended' ? ' bad' : (s === 'due' ? ' warn' : ''); }
+    function pillClass(s) { return s === 'suspended' ? ' r' : (s === 'due' ? ' y' : ''); }
 
+    // ---- pieces ----
     var RING_C = 2 * Math.PI * 27;
-    function ring(used, included, label, color) {
+    function ring(used, included, label, color, iconId, isData) {
         var unlimited = included < 0;
-        var pct = unlimited ? 100 : Math.min(100, included > 0 ? (used / included) * 100 : 100);
-        var ringColor = (!unlimited && pct >= 100) ? 'var(--red)' : color;
-        var offset = RING_C * (1 - pct / 100);
-        var sub = unlimited ? 'Unlimited' : (Math.round(used) + ' / ' + Math.round(included));
-        return '' +
-        '<div class="ring-card">' +
-            '<div class="ring-wrap">' +
-                '<svg viewBox="0 0 64 64">' +
-                    '<circle cx="32" cy="32" r="27" fill="none" stroke-width="7" stroke="var(--hairline)"/>' +
-                    '<circle cx="32" cy="32" r="27" fill="none" stroke-width="7" stroke-linecap="round" ' +
-                        'stroke="' + ringColor + '" stroke-dasharray="' + RING_C + '" stroke-dashoffset="' + offset + '" ' +
-                        'style="transition: stroke-dashoffset 300ms ease;"/>' +
-                '</svg>' +
-                '<div class="ring-pct">' + (unlimited ? '&#8734;' : Math.round(pct) + '%') + '</div>' +
-            '</div>' +
-            '<div class="ring-label">' + label + '</div>' +
-            '<div class="ring-sub">' + sub + '</div>' +
-        '</div>';
+        var pct = unlimited ? 100 : (included > 0 ? Math.min(100, (used / included) * 100) : 100);
+        var over = !unlimited && used > included;
+        var col = over ? 'var(--red)' : color;
+        var sub, subCls = ' class="num"';
+        if (unlimited) sub = L('ui.unlimited', 'Unlimited');
+        else if (over) {
+            subCls = ' class="o num"';
+            sub = L('ui.over', '%s over', raw(isData ? mbText(used - included) : Math.round(used - included)));
+        }
+        else if (isData) sub = mbText(used) + ' / ' + mbText(included);
+        else sub = Math.round(used) + ' / ' + included;
+        return '<div class="rc"><div class="rw">' +
+            '<svg class="r" viewBox="0 0 64 64">' +
+            '<circle cx="32" cy="32" r="27" fill="none" stroke="var(--track)" stroke-width="7"/>' +
+            '<circle cx="32" cy="32" r="27" fill="none" stroke="' + col + '" stroke-width="7" stroke-linecap="round"' +
+            ' stroke-dasharray="' + RING_C.toFixed(1) + '" stroke-dashoffset="' + (RING_C * (1 - pct / 100)).toFixed(1) + '"' +
+            (unlimited ? ' opacity=".45"' : '') + '/></svg>' +
+            '<div class="in" style="color:' + col + '">' + icon(iconId) + '</div></div>' +
+            '<b>' + label + '</b><small' + subCls + '>' + sub + '</small></div>';
     }
 
-    function render() {
-        var el = document.getElementById('scroll');
-        if (!loaded) { el.innerHTML = '<div class="loading">Loading&hellip;</div>'; return; }
-        if (!state) { el.innerHTML = '<div class="empty">Couldn\'t load your account.</div>'; return; }
+    function features(p) {
+        return '<div class="feat">' +
+            '<span>' + icon('i-phone') + unl(p.minutes, 'min') + '</span>' +
+            '<span>' + icon('i-msg') + unl(p.texts, 'text') + '</span>' +
+            '<span>' + icon('i-data') + unl(p.dataMB, 'data') + '</span></div>';
+    }
+    function overage(p) {
+        var parts = [];
+        if (p.minutes >= 0 && p.overagePerMinute > 0) parts.push(L('ui.perMin', '%s per min', raw(fmtRate(p.overagePerMinute))));
+        if (p.texts >= 0 && p.overagePerText > 0) parts.push(L('ui.perText', '%s per text', raw(fmtRate(p.overagePerText))));
+        if (p.dataMB >= 0 && p.overagePerMB > 0) parts.push(L('ui.perMB', '%s per MB', raw(fmtRate(p.overagePerMB))));
+        return parts.length ? '<div class="ov">' + L('ui.extraUse', 'Extra use: %s', raw(parts.join(', '))) + '</div>' : '';
+    }
+    function planById(id) {
+        for (var i = 0; i < S.plans.length; i++) if (S.plans[i].id === id) return S.plans[i];
+        return null;
+    }
 
-        var html = '';
-        if (state.status === 'suspended') {
-            html += '<div class="banner"><div class="icon">&#9888;</div><div>' +
-                '<div class="t">Service Suspended</div>' +
-                '<div class="b">Calls, texts and data are off until your bill is paid.</div>' +
-                '</div></div>';
+    function dueCard(sub) {
+        return '<div class="due"><div><div class="t">' + L('ui.balanceDue', 'Balance due') + '</div><div class="a num">' + fmt(S.balanceDue) + '</div>' +
+            (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>' +
+            '<button class="btn" data-act="pay"' + (busy ? ' disabled' : '') + '>' + L('ui.payNow', 'Pay now') + '</button></div>';
+    }
+
+    // ---- screens ----
+    function viewChoose() {
+        var h = '<div class="safe-top"></div>' +
+            '<div class="head"><img class="logo" src="header-icon.png" alt=""><b>Aero Mobile</b></div>' +
+            '<div class="ttl">' + L('ui.chooseTitle', 'Choose your plan') + '</div>' +
+            '<div class="sub">' + (S.requirePlan
+                ? L('ui.chooseSubRequired', 'Pick a plan to switch on calls, texts and data for this SIM.')
+                : L('ui.chooseSubOptional', 'Pick a plan to get a monthly allowance on this SIM.')) + '</div>' +
+            '<div class="scroll" id="scroll">';
+        if (S.requirePlan) {
+            h += '<div class="note">' + icon('i-info') + '<span>' + L('ui.blockedNote', 'Until you choose a plan, calls and texts are blocked. Emergency numbers always work.') + '</span></div>';
         }
-
-        html += '' +
-        '<button class="plan-card" id="planCardBtn">' +
-            '<div class="row">' +
-                '<div>' +
-                    '<div class="eyebrow">Current Plan</div>' +
-                    '<div class="label">' + state.plan.label + '</div>' +
-                    '<div class="pill"><span class="dot" style="background:' + statusColor(state.status) + '"></span>' + statusLabel(state.status) + '</div>' +
-                '</div>' +
-                '<div class="price"><div class="amt">' + fmt(state.plan.price) + '</div><div class="per">per cycle</div></div>' +
-            '</div>' +
-            '<div class="change">Change Plan &#8250;</div>' +
-        '</button>';
-
-        html += '<div class="rings">' +
-            ring(state.minutesUsed, state.plan.minutes, 'Minutes', 'var(--blue)') +
-            ring(state.textsUsed, state.plan.texts, 'Texts', 'var(--green)') +
-            ring(state.dataMBUsed, state.plan.dataMB, 'Data', 'var(--orange)') +
-        '</div>';
-        html += '<div class="hint">Data usage is an estimate based on how long you\'re on cellular, not exact bytes.</div>';
-
-        html += '<div class="group">' +
-            '<div class="row-item"><span>Estimated This Cycle</span><span class="v">' + fmt(state.estimatedThisCycle) + '</span></div>' +
-            '<div class="row-item"><span>Next Bill Date</span><span class="v">' + fmtDate(state.dueAt) + '</span></div>' +
-            '<div class="row-item"><span>Auto-Pay</span><button class="toggle' + (state.autoPay ? ' on' : '') + '" id="autoPayToggle"><span class="knob"></span></button></div>' +
-        '</div>';
-
-        if (state.balanceDue > 0) {
-            html += '<div class="due-card">' +
-                '<div><div class="t">Balance Due</div><div class="amt">' + fmt(state.balanceDue) + '</div></div>' +
-                '<button class="pay-btn" id="payBtn"' + (busy ? ' disabled' : '') + '>Pay Now</button>' +
-            '</div>';
+        if (S.balanceDue > 0) {
+            h += dueCard(L('ui.oldDebt', 'Unpaid from before. It stays on this SIM until it is paid.'));
         }
+        h += '<div style="height:10px"></div>';
+        S.plans.forEach(function (p) {
+            h += '<button class="plan" data-act="pick" data-plan="' + esc(p.id) + '">' +
+                '<div class="h"><div><b>' + esc(p.label) + '</b>' + (p.popular ? '<span class="tag pop">' + L('ui.popular', 'Popular') + '</span>' : '') + '</div>' +
+                '<div class="p num">' + fmtPrice(p.price) + '<small>' + L('ui.perCycleShort', '/cycle') + '</small></div></div>' +
+                features(p) + overage(p) +
+                '<span class="go">' + L('ui.chooseBtn', 'Choose %s', p.label) + '</span></button>';
+        });
+        h += '<div class="hint">' + (S.planLock
+            ? L('ui.lockHint', 'Your plan runs for %s days and is locked for that time. You can queue a change for your next bill.', S.cycleDays)
+            : L('ui.freeHint', 'You can change plan whenever you like.')) + '</div>';
+        h += '</div>';
+        return h;
+    }
 
-        if (state.history && state.history.length > 0) {
-            html += '<div class="group" style="margin-top:20px">';
-            state.history.forEach(function (h, i) {
-                html += '<div class="row-item"' + (i === state.history.length - 1 ? ' style="border-bottom:none"' : '') + '>' +
-                    '<div><div>' + fmtDate(h.cycleStart) + '</div><div style="font-size:12px;color:var(--text-dim);margin-top:2px">' + (h.paid ? 'Paid' : 'Unpaid') + '</div></div>' +
-                    '<span class="v">' + fmt(h.amount) + '</span>' +
-                '</div>';
+    function progress() {
+        var total = Math.max(1, S.dueAt - S.cycleStart);
+        var el = Math.max(0, S.now - S.cycleStart);
+        return { pct: Math.min(100, (el / total) * 100), day: Math.min(S.cycleDays, Math.floor(el / 86400) + 1) };
+    }
+
+    function viewOverview() {
+        var bad = S.status === 'suspended';
+        var pg = progress();
+        var left, right;
+        if (S.status === 'suspended') { left = L('ui.overdue', 'Overdue'); right = S.payBy ? L('ui.wasDue', 'Was due %s', day(S.payBy)) : ''; }
+        else if (S.status === 'due') { left = L('ui.dayOf', 'Day %s of %s', pg.day, S.cycleDays); right = S.payBy ? L('ui.payBy', 'Pay by %s', day(S.payBy)) : ''; }
+        else { left = L('ui.dayOf', 'Day %s of %s', pg.day, S.cycleDays); right = L('ui.renews', 'Renews %s', day(S.dueAt)); }
+
+        var h = '<div class="safe-top"></div>' +
+            '<div class="head"><img class="logo" src="header-icon.png" alt=""><b>Aero Mobile</b></div>' +
+            '<div class="scroll" id="scroll">';
+        if (bad) {
+            h += '<div class="banner red">' + icon('i-warn') + '<div class="tx"><b>' + L('ui.suspendedTitle', 'Service suspended') + '</b><span>' +
+                L('ui.suspendedBody', 'Calls, texts and data are off until your bill is paid. Emergency numbers still work.') + '</span></div></div>';
+        }
+        if (S.pendingPlan) {
+            h += '<div class="banner blue">' + icon('i-clock') + '<div class="tx"><b>' + L('ui.switchingTo', 'Switching to %s on %s', S.pendingPlan.label, day(S.dueAt)) + '</b>' +
+                '<span>' + L('ui.nextBillStill', 'Your next bill is still for %s.', S.plan.label) + '</span>' +
+                '<button class="lnk" data-act="cancelPending"' + (busy ? ' disabled' : '') + '>' + L('ui.cancelSwitch', 'Cancel switch') + '</button></div></div>';
+        }
+        h += '<div class="hero' + heroClass(S.status) + '">' +
+            '<div class="pr"><b class="num">' + fmtPrice(S.plan.price) + '</b><small>' + L('ui.perCycle', 'per cycle') + '</small></div>' +
+            '<div class="eb">' + L('ui.currentPlan', 'Current plan') + '</div><div class="pl">' + esc(S.plan.label) + '</div>' +
+            '<div class="pill' + pillClass(S.status) + '"><i></i>' + statusLabel(S.status) + '</div>' +
+            '<div class="cyc"><div class="t"><span>' + left + '</span><span>' + right + '</span></div>' +
+            '<div class="bar"><i style="width:' + pg.pct.toFixed(1) + '%"></i></div></div></div>';
+        if (S.balanceDue > 0) h += dueCard(bad ? L('ui.restoreHint', 'Pay to restore service. It switches back on straight away.') : '');
+        h += '<div class="rings">' +
+            ring(S.minutesUsed, S.plan.minutes, L('ui.minutes', 'Minutes'), 'var(--blue)', 'i-phone', false) +
+            ring(S.textsUsed, S.plan.texts, L('ui.texts', 'Texts'), 'var(--green)', 'i-msg', false) +
+            ring(S.dataMBUsed, S.plan.dataMB, L('ui.data', 'Data'), 'var(--orange)', 'i-data', true) + '</div>';
+        h += '<div class="list">' +
+            '<div class="li"><span>' + L('ui.estimated', 'Estimated this cycle') + '</span><span class="mut num">' + fmt(S.estimatedThisCycle) + '</span></div>' +
+            (S.lockedUntil ? '<div class="li"><span>' + L('ui.lockedUntil', 'Plan locked until') + '</span><span class="mut">' + day(S.lockedUntil) + '</span></div>' : '') +
+            '<div class="li"><div class="l2">' + L('ui.autoPay', 'Auto-pay') + '<small>' +
+                (S.autoPay ? L('ui.autoPayOn', 'Charged to your bank on %s', day(S.dueAt)) : L('ui.autoPayOff', 'Off · pay by hand')) + '</small></div>' +
+            '<button class="tog' + (S.autoPay ? ' on' : '') + '" data-act="autopay" aria-label="' + L('ui.autoPay', 'Auto-pay') + '"></button></div></div>';
+        h += '<div class="hint">' + L('ui.dataHint', 'Data usage is an estimate based on time spent on mobile data, not exact bytes.') + '</div>';
+        h += '</div>';
+        return h;
+    }
+
+    function viewPlans() {
+        var sub = S.planLock
+            ? L('ui.planSubLocked', 'Your plan is locked until %s. You can queue a switch for your next bill.', day(S.lockedUntil))
+            : L('ui.planSubFree', 'Switch any time. Changes start straight away.');
+        var h = '<div class="safe-top"></div><div class="ttl">' + L('ui.plansTitle', 'Plans') + '</div><div class="sub">' + sub + '</div><div class="scroll" id="scroll" style="padding-top:14px">';
+        S.plans.forEach(function (p) {
+            var isCur = p.id === S.plan.id;
+            var isNext = S.pendingPlan && S.pendingPlan.id === p.id;
+            var tags = '';
+            if (isCur) tags += '<span class="tag cur">' + L('ui.current', 'Current') + '</span>';
+            else if (isNext) tags += '<span class="tag next">' + L('ui.nextBillTag', 'Next bill') + '</span>';
+            else if (p.popular) tags += '<span class="tag pop">' + L('ui.popular', 'Popular') + '</span>';
+            var action = '';
+            if (isNext) action = '<span class="go grey" data-act="cancelPending" role="button">' + L('ui.cancelSwitch', 'Cancel switch') + '</span>';
+            else if (!isCur) action = '<span class="go">' + (S.planLock ? L('ui.switchOn', 'Switch on %s', day(S.lockedUntil)) : L('ui.switchTo', 'Switch to %s', p.label)) + '</span>';
+            h += '<button class="plan' + (isCur ? ' cur' : '') + (isNext ? ' next' : '') + '" ' + (isCur || isNext ? '' : 'data-act="pick" data-plan="' + esc(p.id) + '"') + '>' +
+                '<div class="h"><div><b>' + esc(p.label) + '</b>' + tags + '</div><div class="p num">' + fmtPrice(p.price) + '<small>' + L('ui.perCycleShort', '/cycle') + '</small></div></div>' +
+                features(p) + ((isCur || isNext) ? overage(p) : '') + action + '</button>';
+        });
+        h += '</div>';
+        return h;
+    }
+
+    function billRange(h) {
+        return day(h.cycleStart) + ' – ' + day(h.cycleStart + S.cycleDays * 86400 - 1);
+    }
+
+    function viewBills() {
+        var extras = Math.max(0, S.estimatedThisCycle - S.plan.price);
+        var h = '<div class="safe-top"></div><div class="ttl">' + L('ui.billsTitle', 'Bills') + '</div><div class="scroll" id="scroll" style="padding-top:12px">';
+        if (S.balanceDue > 0) h += dueCard(S.status === 'suspended' ? L('ui.dueSuspendedSub', 'Service is suspended until this is paid.') : '') + '<div style="height:12px"></div>';
+        h += '<div class="sum"><div class="lbl">' + L('ui.cycleSoFar', 'This cycle so far') + '</div><div class="big num">' + fmt(S.estimatedThisCycle) + '</div>' +
+            '<div class="split">' +
+            '<div><span>' + L('ui.planLine', '%s plan', S.plan.label) + '</span><span class="num">' + fmt(S.plan.price) + '</span></div>' +
+            '<div' + (extras <= 0 ? ' class="z"' : '') + '><span>' + L('ui.extras', 'Extra minutes, texts, data') + '</span><span class="num">' + fmt(extras) + '</span></div>' +
+            '<div><span>' + L('ui.billDate', 'Bill date') + '</span><span>' + day(S.dueAt) + '</span></div></div></div>';
+        h += '<div class="cap">' + L('ui.pastBills', 'Past bills') + '</div>';
+        if (!S.history || !S.history.length) {
+            h += '<div class="list" style="margin-top:0"><div class="none">' + L('ui.noBills', 'No bills yet. Your first one arrives on %s.', day(S.dueAt)) + '</div></div>';
+        } else {
+            h += '<div class="list" style="margin-top:0">';
+            S.history.forEach(function (b) {
+                var p = planById(b.planId);
+                var base = p ? p.price : 0;
+                var extra = Math.max(0, b.amount - base);
+                var open = openBill === b.id;
+                var name = p ? p.label : b.planId;
+                h += '<button class="bill" data-act="bill" data-id="' + esc(b.id) + '">' +
+                    '<div class="ico' + (b.paid ? '' : ' u') + '">' + icon(b.paid ? 'i-check' : 'i-warn') + '</div>' +
+                    '<div class="m">' + billRange(b) + '<small>' + esc(name) + '</small></div>' +
+                    '<div class="r num">' + fmt(b.amount) + (b.paid
+                        ? '<small>' + (b.paidAt ? L('ui.paidOn', 'Paid %s', day(b.paidAt)) : L('ui.paid', 'Paid')) + '</small>'
+                        : '<small class="u">' + L('ui.unpaid', 'Unpaid') + '</small>') + '</div>';
+                if (open) {
+                    h += '<div class="det num"><div><span>' + L('ui.planLine', '%s plan', name) + '</span><span>' + fmt(Math.min(base, b.amount)) + '</span></div>' +
+                        (extra > 0 ? '<div><span>' + L('ui.extras', 'Extra minutes, texts, data') + '</span><span>' + fmt(extra) + '</span></div>' : '') + '</div>';
+                }
+                h += '</button>';
             });
-            html += '</div>';
+            h += '</div>';
         }
-
-        el.innerHTML = html;
-
-        var planBtn = document.getElementById('planCardBtn');
-        if (planBtn) planBtn.onclick = function () { pickingPlan = true; renderSheet(); };
-        var toggle = document.getElementById('autoPayToggle');
-        if (toggle) toggle.onclick = toggleAutoPay;
-        var payBtn = document.getElementById('payBtn');
-        if (payBtn) payBtn.onclick = handlePay;
-
-        renderSheet();
-        renderToast();
+        h += '</div>';
+        return h;
     }
 
-    function renderSheet() {
-        var existing = document.getElementById('sheetBackdrop');
-        if (existing) existing.remove();
-        if (!pickingPlan || !state) return;
-
-        var backdrop = document.createElement('div');
-        backdrop.className = 'sheet-backdrop';
-        backdrop.id = 'sheetBackdrop';
-        backdrop.onclick = function (e) { if (e.target === backdrop) { pickingPlan = false; renderSheet(); } };
-
-        var sheet = document.createElement('div');
-        sheet.className = 'sheet';
-        sheet.onclick = function (e) { e.stopPropagation(); };
-
-        var html = '<div class="sheet-title">Choose a Plan</div>';
-        state.plans.forEach(function (plan) {
-            var isCurrent = plan.id === state.plan.id;
-            html += '<button class="plan-opt" data-plan="' + plan.id + '"' + ((busy || isCurrent) ? ' disabled' : '') + '>' +
-                '<div>' +
-                    '<div class="name">' + plan.label + (isCurrent ? ' &#10003;' : '') + '</div>' +
-                    '<div class="meta">' +
-                        '<span>&#128222; ' + (plan.minutes < 0 ? 'Unlimited' : plan.minutes) + '</span>' +
-                        '<span>&#128172; ' + (plan.texts < 0 ? 'Unlimited' : plan.texts) + '</span>' +
-                        '<span>&#128225; ' + (plan.dataMB < 0 ? 'Unlimited' : (plan.dataMB / 1000).toFixed(1) + 'GB') + '</span>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="cost">' + fmt(plan.price) + '<span>/cyc</span></div>' +
-            '</button>';
-        });
-        sheet.innerHTML = html;
-        backdrop.appendChild(sheet);
-        document.getElementById('phone-col').appendChild(backdrop);
-
-        Array.prototype.forEach.call(sheet.querySelectorAll('.plan-opt'), function (btn) {
-            btn.onclick = function () { selectPlan(btn.getAttribute('data-plan')); };
-        });
+    function viewSheet() {
+        if (!sheet) return '';
+        var p = planById(sheet.planId);
+        if (!p) return '';
+        var per = L('ui.perCycleFull', '%s / cycle', raw(fmtPrice(p.price)));
+        var h = '<div class="dim" data-act="closeSheet"></div><div class="sheet"><div class="grab"></div>';
+        if (sheet.kind === 'start') {
+            h += '<h3>' + L('ui.startTitle', 'Start %s?', p.label) + '</h3>' +
+                '<p>' + (S.planLock
+                    ? L('ui.startBodyLock', "Your plan starts now and runs for %s days. It's locked for that time, but you can queue a change for your next bill.", S.cycleDays)
+                    : L('ui.startBodyFree', 'Your plan starts now. You can change it whenever you like.')) + '</p>' +
+                '<div class="cmp"><div class="n"><b>' + esc(p.label) + '</b><small class="num">' + per + '</small></div></div>' +
+                '<button class="btn blue full" data-act="confirm"' + (busy ? ' disabled' : '') + '>' + L('ui.startBtn', 'Start plan') + '</button>';
+        } else {
+            var c = S.plan;
+            var locked = S.planLock;
+            h += '<h3>' + (locked ? L('ui.switchTitleLocked', 'Switch to %s on %s?', p.label, day(S.lockedUntil)) : L('ui.switchTitle', 'Switch to %s?', p.label)) + '</h3>' +
+                '<p>' + (locked
+                    ? L('ui.switchBodyLocked', 'You stay on %s until then, and your next bill is still for %s. You can cancel the switch before it starts.', c.label, c.label)
+                    : L('ui.switchBodyNow', 'The change starts straight away.')) + '</p>' +
+                '<div class="cmp"><div><b>' + esc(c.label) + '</b><small class="num">' + L('ui.perCycleFull', '%s / cycle', raw(fmtPrice(c.price))) + '</small></div>' +
+                '<div class="ar">' + icon('i-arrow') + '</div>' +
+                '<div class="n"><b>' + esc(p.label) + '</b><small class="num">' + per + '</small></div></div>' +
+                '<button class="btn blue full" data-act="confirm"' + (busy ? ' disabled' : '') + '>' + (locked ? L('ui.queueBtn', 'Queue switch') : L('ui.switchBtn', 'Switch plan')) + '</button>';
+        }
+        h += '<button class="cancel" data-act="closeSheet">' + L('ui.cancel', 'Cancel') + '</button></div>';
+        return h;
     }
 
-    function renderToast() {
-        var existing = document.getElementById('toastEl');
-        if (existing) existing.remove();
-        if (!errMsg) return;
-        var toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.id = 'toastEl';
-        toast.textContent = errMsg;
-        document.getElementById('phone-col').appendChild(toast);
-        setTimeout(function () { errMsg = null; renderToast(); }, 3000);
+    function viewTabs() {
+        function t(id, label, ico, badge) {
+            return '<button class="' + (tab === id ? 'on' : '') + '" data-act="tab" data-tab="' + id + '">' + icon(ico) + label + (badge ? '<span class="badge"></span>' : '') + '</button>';
+        }
+        return '<div class="tabs">' + t('overview', L('ui.tabOverview', 'Overview'), 'i-home') + t('plans', L('ui.tabPlans', 'Plans'), 'i-plan') +
+            t('bills', L('ui.tabBills', 'Bills'), 'i-bill', S.balanceDue > 0) + '</div>';
     }
 
+    // ---- render ----
+    function render() {
+        var col = document.getElementById('col');
+        var sc = document.getElementById('scroll');
+        var top = sc ? sc.scrollTop : 0;
+        var html;
+        if (!loaded) html = '<div class="safe-top"></div><div class="loading">' + L('ui.loading', 'Loading…') + '</div>';
+        else if (!S) html = '<div class="safe-top"></div><div class="empty">' + L('ui.loadFailed', "Couldn't load your account.") + '<br><br><button class="btn" data-act="retry">' + L('ui.retry', 'Try again') + '</button></div>';
+        else if (!S.chosen) html = viewChoose() + viewSheet();
+        else {
+            html = (tab === 'plans' ? viewPlans() : tab === 'bills' ? viewBills() : viewOverview()) + viewTabs() + viewSheet();
+        }
+        if (toast) html += '<div class="toast' + (toast.err ? ' err' : '') + '">' + esc(toast.text) + '</div>';
+        col.innerHTML = html;
+        sc = document.getElementById('scroll');
+        if (sc && top) sc.scrollTop = top;
+    }
+
+    function say(text, err) {
+        toast = { text: text, err: !!err };
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toast = null; render(); }, 3200);
+    }
+    // toast text is escaped again by render(), so take the plain text back out of L()
+    function plain(s) { return String(s).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"); }
+
+    // ---- actions ----
     function refresh() {
-        post('sd_carrier/status').then(function (res) {
-            state = (res && res.ok) ? res.data : null;
+        return post('sd_carrier/status').then(function (res) {
+            S = (res && res.ok) ? res.data : null;
             loaded = true;
             render();
         });
     }
 
-    function handlePay() {
+    function apply(res, okText, failText) {
+        busy = false;
+        if (!res || !res.ok) { say((res && res.error) || plain(failText), true); render(); return false; }
+        S = res.data;
+        sheet = null;
+        if (okText) say(plain(typeof okText === 'function' ? okText() : okText));
+        render();
+        return true;
+    }
+
+    function pay() {
+        if (busy) return;
         busy = true; render();
         post('sd_carrier/payBill').then(function (res) {
-            busy = false;
-            if (!res || !res.ok) { errMsg = (res && res.error) || 'Payment failed'; render(); return; }
-            state = res.data; render();
+            apply(res, function () { return S.status === 'current' ? L('ui.toastPaid', 'Paid. Service is on.') : L('ui.toastPaidShort', 'Paid.'); }, L('err.paymentFailed', 'Payment failed'));
         });
     }
 
-    function selectPlan(planId) {
+    function confirmSheet() {
+        if (busy || !sheet) return;
+        var kind = sheet.kind, id = sheet.planId;
         busy = true; render();
-        post('sd_carrier/selectPlan', { planId: planId }).then(function (res) {
-            busy = false; pickingPlan = false;
-            if (!res || !res.ok) { errMsg = (res && res.error) || 'Failed to switch plans'; render(); return; }
-            state = res.data; render();
+        post('sd_carrier/selectPlan', { planId: id }).then(function (res) {
+            apply(res, function () {
+                if (kind === 'start') return L('ui.toastStart', "You're on %s.", S.plan ? S.plan.label : '');
+                return S.pendingPlan ? L('ui.toastQueued', 'Switch queued for %s.', day(S.dueAt)) : L('ui.toastChanged', 'Plan changed.');
+            }, L('err.switchFailed', "Couldn't change plan"));
         });
+    }
+
+    function cancelPending() {
+        if (busy) return;
+        busy = true; render();
+        post('sd_carrier/cancelPending').then(function (res) { apply(res, L('ui.toastCancelled', 'Switch cancelled.'), L('ui.cancelFailed', "Couldn't cancel")); });
     }
 
     function toggleAutoPay() {
-        if (!state) return;
-        var next = !state.autoPay;
-        state = Object.assign({}, state, { autoPay: next });
-        render();
+        if (!S) return;
+        var next = !S.autoPay;
+        S.autoPay = next; render();
         post('sd_carrier/setAutoPay', { on: next }).then(function (res) {
-            if (!res || !res.ok) { state = Object.assign({}, state, { autoPay: !next }); render(); }
+            if (!res || !res.ok) { S.autoPay = !next; say((res && res.error) || plain(L('ui.autoPayFailed', "Couldn't change auto-pay")), true); render(); }
         });
     }
 
+    document.getElementById('col').addEventListener('click', function (e) {
+        var el = e.target.closest ? e.target.closest('[data-act]') : null;
+        if (!el) return;
+        var act = el.getAttribute('data-act');
+        if (act === 'tab') { tab = el.getAttribute('data-tab'); render(); }
+        else if (act === 'pick') {
+            e.stopPropagation();
+            if (!S) return;
+            sheet = { kind: S.chosen ? 'switch' : 'start', planId: el.getAttribute('data-plan') };
+            render();
+        }
+        else if (act === 'closeSheet') { sheet = null; render(); }
+        else if (act === 'confirm') confirmSheet();
+        else if (act === 'pay') pay();
+        else if (act === 'cancelPending') { e.stopPropagation(); cancelPending(); }
+        else if (act === 'autopay') toggleAutoPay();
+        else if (act === 'bill') { var id = el.getAttribute('data-id'); openBill = openBill === id ? null : id; render(); }
+        else if (act === 'retry') { loaded = false; render(); refresh(); }
+    });
+
+    // ---- data heartbeat (only counts while a plan is on and service isn't blocked) ----
     var heartbeatTimer = null;
     function startHeartbeat(seconds) {
-        stopHeartbeat();
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
         heartbeatTimer = setInterval(function () {
             if (document.visibilityState !== 'visible') return;
+            if (!S || !S.chosen || S.blocked) return;
             post('sd_carrier/dataHeartbeat');
         }, (seconds || 60) * 1000);
-    }
-    function stopHeartbeat() {
-        if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
     }
 
     var shown = false;
     function showApp() {
         if (shown) return;
         shown = true;
-
         document.documentElement.style.visibility = 'visible';
         document.body.style.visibility = 'visible';
+        render();
         refresh();
+        post('sd_carrier/locale').then(function (d) {
+            if (d && typeof d === 'object' && !d.error) { DICT = d; render(); }
+        });
         post('sd_carrier/config').then(function (cfg) {
+            if (cfg && cfg.currency) { cur = cfg.currency; render(); }
             startHeartbeat((cfg && cfg.dataHeartbeatSeconds) || 60);
         });
     }
@@ -413,11 +649,12 @@
         if (event.data === 'componentsLoaded') { showApp(); return; }
         var data = event.data;
         if (!data || typeof data !== 'object') return;
-        if (!shown) return;
-        if (data.action === 'sd_carrier:updated') { refresh(); return; }
         if (data.action === 'sd-phone:theme' && data.theme) {
             document.body.setAttribute('data-theme', data.theme);
+            return;
         }
+        if (!shown) return;
+        if (data.action === 'sd_carrier:updated') refresh();
     });
 
     document.addEventListener('visibilitychange', function () {
