@@ -445,6 +445,7 @@ end)
 local nudged = {}
 local NUDGE_EVERY = 600
 
+RegisterNetEvent('sd-phone:server:phone:setOpen')
 AddEventHandler('sd-phone:server:phone:setOpen', function(open)
     local src = source
     if not src or not open then return end
