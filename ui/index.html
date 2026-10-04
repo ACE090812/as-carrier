@@ -172,11 +172,12 @@
     .note svg { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 
     /* tab bar */
-    .tabs { display: flex; justify-content: space-around; padding: 10px 0 22px; border-top: 1px solid var(--line); background: var(--bg); flex-shrink: 0; }
-    .tabs button { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--dim); position: relative; padding: 0 22px; font-weight: 500; }
+    .tabs { display: flex; justify-content: space-around; padding: 10px 6px 22px; border-top: 1px solid var(--line); background: var(--bg); flex-shrink: 0; }
+    .tabs button { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--dim); position: relative; padding: 0 2px; font-weight: 500; flex: 1 1 0; min-width: 0; }
+    .tabs button span.lb { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tabs button.on { color: var(--accent); }
     .tabs svg { width: 23px; height: 23px; }
-    .tabs .badge { position: absolute; top: -2px; right: 16px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); border: 2px solid var(--bg); box-sizing: content-box; }
+    .tabs .badge { position: absolute; top: -2px; left: calc(50% + 8px); width: 9px; height: 9px; border-radius: 50%; background: var(--red); border: 2px solid var(--bg); box-sizing: content-box; }
 
     /* sheet */
     .dim { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 20; animation: fade .2s; }
@@ -1085,7 +1086,7 @@
 
     function viewTabs() {
         function t(id, label, ico, badge) {
-            return '<button class="' + (tab === id ? 'on' : '') + '" data-act="tab" data-tab="' + id + '">' + icon(ico) + label + (badge ? '<span class="badge"></span>' : '') + '</button>';
+            return '<button class="' + (tab === id ? 'on' : '') + '" data-act="tab" data-tab="' + id + '">' + icon(ico) + '<span class="lb">' + label + '</span>' + (badge ? '<span class="badge"></span>' : '') + '</button>';
         }
         return '<div class="tabs">' + t('overview', L('ui.tabOverview', 'Overview'), 'i-home') + t('plans', L('ui.tabPlans', 'Plans'), 'i-plan') +
             t('usage', L('ui.tabUsage', 'Usage'), 'i-chart') +
