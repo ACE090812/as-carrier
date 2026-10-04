@@ -35,7 +35,8 @@ local ACTIONS = {
     buyAddon      = 'sd_carrier:buyAddon',
     pause         = 'sd_carrier:pause',
     resume        = 'sd_carrier:resume',
-    dataHeartbeat = 'sd_carrier:dataHeartbeat',
+    setAutoTopUp  = 'sd_carrier:setAutoTopUp',
+    sendReceipt   = 'sd_carrier:sendReceipt',
 }
 
 for action, callback in pairs(ACTIONS) do
@@ -46,4 +47,33 @@ end
 
 RegisterNetEvent('sd_carrier:client:updated', function()
     SendNUIMessage({ action = 'sd_carrier:updated' })
+end)
+
+-- Mobile data use. Same rule as sd-phone's own meter: a ping every interval while the phone is open, NOT on Wi-Fi
+-- (Wi-Fi is free) and with cell data available. It runs whether or not the Carrier app is open. The server counts
+-- the ping (and refuses it while it knows the phone is closed or when pings come too fast).
+CreateThread(function()
+    local every = math.max(15, tonumber(Config.billing.dataHeartbeatSeconds) or 60) * 1000
+    while true do
+        Wait(every)
+        local ok, open, wifi, data = pcall(function()
+            local sd = exports['sd-phone']
+            return sd:isOpen() == true, sd:isOnWifi() == true, sd:hasService('data') == true
+        end)
+        if ok and open and not wifi and data then
+            lib.callback.await('sd_carrier:dataHeartbeat', false)
+        end
+    end
+end)
+
+-- /carrier dash: the staff dashboard as a menu.
+RegisterNetEvent('sd_carrier:client:dash', function(payload)
+    if type(payload) ~= 'table' or type(payload.lines) ~= 'table' then return end
+    local options = {}
+    for i, line in ipairs(payload.lines) do
+        local label, value = tostring(line):match('^([^:]+):%s*(.+)$')
+        options[i] = { title = label or tostring(line), description = value, readOnly = true }
+    end
+    lib.registerContext({ id = 'sd_carrier_dash', title = payload.title or 'Aero Mobile', options = options })
+    lib.showContext('sd_carrier_dash')
 end)

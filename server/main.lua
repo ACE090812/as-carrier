@@ -105,6 +105,24 @@ lib.callback.register('sd_carrier:buyAddon', function(source, payload)
     return withAccount(source, function(key, row) return core.buyAddon(key, row, source, payload.id) end)
 end)
 
+lib.callback.register('sd_carrier:setAutoTopUp', function(source, payload)
+    payload = type(payload) == 'table' and payload or {}
+    return withAccount(source, function(key, row)
+        return core.setAutoTopUp(key, row, source, payload.amount, payload.below)
+    end)
+end)
+
+lib.callback.register('sd_carrier:sendReceipt', function(source, payload)
+    payload = type(payload) == 'table' and payload or {}
+    if type(payload.id) ~= 'string' then return { ok = false, error = T('err.noSuchEntry') } end
+    local key, err = core.resolveKey(source)
+    if not key then return { ok = false, error = err } end
+    core.touchSource(key, source)
+    local ok, how = core.sendReceipt(key, core.ensureAccount(key), source, payload.id)
+    if not ok then return { ok = false, error = how } end
+    return { ok = true, data = { how = how } }
+end)
+
 lib.callback.register('sd_carrier:pause', function(source, payload)
     payload = type(payload) == 'table' and payload or {}
     return withAccount(source, function(key, row) return core.pause(key, row, source, payload.days) end)
@@ -114,13 +132,18 @@ lib.callback.register('sd_carrier:resume', function(source)
     return withAccount(source, function(key, row) return core.resumeNow(key, row) end)
 end)
 
--- Data heartbeat: the app calls this while it is open on mobile data. Called too fast, it is ignored.
+-- Data heartbeat. The carrier's client script sends one every few seconds while the phone is open and off Wi-Fi
+-- (the same rule sd-phone uses), whether or not the Carrier app is open. Wi-Fi and the open phone are known only
+-- to the client, so the server can't measure them itself; what it does check: the phone must not be known to be
+-- closed, and beats arriving faster than the interval are ignored.
 local lastBeat = {}
+local phoneOpen = {}   -- [source] = true/false as reported by sd-phone, nil until the first report
 lib.callback.register('sd_carrier:dataHeartbeat', function(source)
     local key = core.resolveKey(source)
     if not key then return { ok = false } end
     core.touchSource(key, source)
 
+    if phoneOpen[source] == false then return { ok = true } end
     local now = os.time()
     local every = math.max(10, (tonumber(billingCfg.dataHeartbeatSeconds) or 60) * 0.8)
     if lastBeat[source] and now - lastBeat[source] < every then return { ok = true } end
@@ -175,7 +198,9 @@ local NUDGES = {
 RegisterNetEvent('sd-phone:server:phone:setOpen')
 AddEventHandler('sd-phone:server:phone:setOpen', function(open)
     local src = source
-    if not src or not open then return end
+    if not src then return end
+    phoneOpen[src] = open == true
+    if not open then return end
     local now = os.time()
     if nudged[src] and now - nudged[src] < NUDGE_EVERY then return end
     local key = core.resolveKey(src)
@@ -195,10 +220,18 @@ AddEventHandler('sd-phone:server:phone:setOpen', function(open)
     end
 end)
 
+-- sd-phone also reports the open phone through its state bag feed (client/statebags.lua): { open = bool, ... }
+RegisterNetEvent('sd-phone:server:statebags:report')
+AddEventHandler('sd-phone:server:statebags:report', function(payload)
+    local src = source
+    if src and type(payload) == 'table' and payload.open ~= nil then phoneOpen[src] = payload.open == true end
+end)
+
 AddEventHandler('playerDropped', function()
     local src = source
     nudged[src] = nil
     lastBeat[src] = nil
+    phoneOpen[src] = nil
     for _, key in ipairs(core.forgetSource(src)) do
         local ok, err = pcall(core.flushKey, key)
         if not ok then print(('[as-carrier] could not save usage for %s: %s'):format(key, tostring(err))) end
@@ -285,7 +318,14 @@ local function tryConsumeDownloadData(source, mb)
 
         local state = core.dataState(key)
         if state == 'blocked' then reply = { success = false, message = T('err.outOfData') } return end
-        if state == 'throttled' then reply = { success = true, throttled = true, message = T('err.throttled') } return end
+        if state == 'throttled' then
+            -- how long a download would take at the throttled speed (the phone waits this long if it uses delayMs)
+            local kbps = math.max(1, tonumber(billingCfg.throttleKBps) or 256)
+            local maxSeconds = math.max(0, tonumber(billingCfg.throttleMaxSeconds) or 90)
+            local seconds = math.min(maxSeconds, (tonumber(mb) or 0) * 1024 / kbps)
+            reply = { success = true, throttled = true, delayMs = math.floor(seconds * 1000), message = T('err.throttled') }
+            return
+        end
         core.record(key, 'data', tonumber(mb) or 0)
         core.pushUpdate(key)
         reply = { success = true }

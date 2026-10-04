@@ -4,7 +4,7 @@ local H = require 'tests.harness'
 
 local passed, failed = 0, 0
 local function check(cond, msg)
-    if cond then passed = passed + 1 else failed = failed + 1 print('  FAIL: ' .. msg) end
+    if cond then passed = passed + 1 else failed = failed + 1 io.write('  FAIL: ' .. msg .. '\n') end
 end
 local function eq(a, b, msg) check(a == b, ('%s (got %s, want %s)'):format(msg, tostring(a), tostring(b))) end
 local function near(a, b, msg) check(math.abs((a or 0) - b) < 0.0051, ('%s (got %s, want %s)'):format(msg, tostring(a), tostring(b))) end
@@ -689,6 +689,455 @@ do
     core.flushAll()
     eq(row(key).texts_used, 3, 'counters saved on the next flush')
     eq(H.store.daily[key][math.floor(H.NOW / DAY)].texts, 3, 'daily usage saved too')
+end
+
+
+-- ---------------------------------------------------------------------------------------------
+section('minute and text add-ons')
+do
+    local core = H.load(function(c) c.promotions = {} end)
+    local key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    local st = H.call('status', 1).data
+    local ids = {}
+    for _, a in ipairs(st.addons) do ids[a.id] = true end
+    check(ids.data1 and ids.min100 and ids.txt100, 'a plan with limits is offered every add-on')
+    local r = H.call('buyAddon', 1, { id = 'min100' })
+    check(r.ok, 'bought 100 minutes')
+    eq(H.bank[1], 996, 'charged 4')
+    eq(r.data.extraMinutes, 100, 'extra minutes held')
+    H.call('buyAddon', 1, { id = 'txt100' })
+    eq(row(key).extra_texts, 100, 'extra texts held')
+    -- 340 minutes used: 250 + 100 included = 350, so no overage
+    H.handlers['sd-phone:server:call:ended']({ caller = { citizenid = key }, callee = { citizenid = 'x' }, duration = 340 * 60 })
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)
+    check(itemOf(lastBill(key), 'minutes') == nil, 'the add-on minutes covered the usage')
+    eq(row(key).extra_minutes, 0, 'gone after the cycle')
+
+    -- unlimited texts: the text add-on is useless and hidden
+    core = H.load(function(c) c.promotions = {} end)
+    key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'standard' })
+    st = H.call('status', 1).data
+    ids = {}
+    for _, a in ipairs(st.addons) do ids[a.id] = true end
+    check(ids.min100 and not ids.txt100, 'the text add-on is hidden where texts are unlimited')
+    r = H.call('buyAddon', 1, { id = 'txt100' })
+    check(not r.ok, 'and refused')
+    H.call('buyAddon', 1, { id = 'min100' })
+    -- cap
+    core = H.load(function(c) c.promotions = {}; c.billing.addons.maxExtraMinutes = 150 end)
+    H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.call('buyAddon', 1, { id = 'min100' })
+    r = H.call('buyAddon', 1, { id = 'min100' })
+    check(not r.ok, 'the cap stops a second 100 minutes')
+    -- carry over per kind
+    core = H.load(function(c) c.promotions = {}; c.billing.addons.carryOver = true end)
+    key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.call('buyAddon', 1, { id = 'min100' })
+    H.call('buyAddon', 1, { id = 'txt100' })
+    H.handlers['sd-phone:server:messages:sent']({ citizenid = key })
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)
+    eq(row(key).extra_minutes, 100, 'unused minutes carry over')
+    eq(row(key).extra_texts, 100, 'unused texts carry over')
+    -- payg pays from credit
+    core = H.load(function(c) c.promotions = {} end)
+    key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'payg' })
+    H.call('topUp', 1, { amount = 10 })
+    r = H.call('buyAddon', 1, { id = 'min100' })
+    check(r.ok, 'prepaid buys an add-on from credit')
+    near(row(key).credit, 6, 'credit paid')
+    H.handlers['sd-phone:server:call:ended']({ caller = { citizenid = key }, callee = { citizenid = 'x' }, duration = 60 * 50 })
+    near(row(key).credit, 6, 'the add-on minutes are free to use up')
+    eq(H.store.history[#H.store.history].pay, 'credit', 'the sale is marked as credit spent')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('auto top-up (a player option)')
+do
+    local core = H.load(function(c) c.promotions = {} end)
+    local key = H.player(1, 100)
+    H.call('selectPlan', 1, { planId = 'payg' })
+    local r = H.call('setAutoTopUp', 1, { amount = 10, below = 2 })
+    check(r.ok, 'auto top-up on')
+    eq(r.data.autoTopUp.amount, 10, 'saved')
+    near(row(key).credit, 10, 'with no credit it tops up straight away')
+    eq(H.bank[1], 90, 'from the bank')
+    check(#H.notices('Auto top-up') >= 1, 'told')
+    -- using credit down to the level triggers it
+    H.handlers['sd-phone:server:call:ended']({ caller = { citizenid = key }, callee = { citizenid = 'x' }, duration = 60 * 55 })
+    H.runThreads()
+    check(row(key).credit > 2, 'topped up again after use (credit ' .. tostring(row(key).credit) .. ')')
+    eq(H.bank[1], 80, 'second top-up from the bank')
+    local topups = 0
+    for _, h in ipairs(H.store.history) do if h.kind == 'topup' then topups = topups + 1 end end
+    eq(topups, 2, 'both on the activity list')
+    -- out of money: one notice, retried later
+    H.bank[1] = 0
+    H.handlers['sd-phone:server:call:ended']({ caller = { citizenid = key }, callee = { citizenid = 'x' }, duration = 60 * 200 })
+    H.runThreads()
+    eq(core._.cache[key].credit, 0, 'credit ran out')
+    eq(#H.notices('Auto top-up failed'), 1, 'one failure notice')
+    H.handlers['sd-phone:server:call:ended']({ caller = { citizenid = key }, callee = { citizenid = 'x' }, duration = 60 }) H.runThreads()
+    eq(#H.notices('Auto top-up failed'), 1, 'no second notice')
+    H.bank[1] = 50
+    H.advance(601)
+    H.handlers['sd-phone:server:call:ended']({ caller = { citizenid = key }, callee = { citizenid = 'x' }, duration = 60 }) H.runThreads()
+    check(row(key).credit >= 10, 'retried after the interval and worked')
+    -- off
+    r = H.call('setAutoTopUp', 1, { amount = 0 })
+    check(r.ok and r.data.autoTopUp.amount == 0, 'turned off')
+    -- not for a monthly plan
+    core = H.load(function(c) c.promotions = {} end)
+    H.player(1, 100)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    r = H.call('setAutoTopUp', 1, { amount = 10, below = 2 })
+    check(not r.ok, 'a monthly plan has no credit to top up')
+    -- disabled by the owner
+    core = H.load(function(c) c.promotions = {}; c.prepaid.autoTopUp.enabled = false end)
+    H.player(1, 100)
+    H.call('selectPlan', 1, { planId = 'payg' })
+    r = H.call('setAutoTopUp', 1, { amount = 10, below = 2 })
+    check(not r.ok, 'refused when the server has it off')
+    -- bundle auto-renew with short credit tops up first
+    core = H.load(function(c) c.promotions = {} end)
+    key = H.player(1, 100)
+    H.call('topUp', 1, { amount = 10 })
+    H.call('selectPlan', 1, { planId = 'bundle30' })
+    H.call('setAutoPay', 1, { on = true })
+    H.call('setAutoTopUp', 1, { amount = 20, below = 0 })
+    H.advance(31 * DAY)
+    core.sweepOnce()
+    eq(core.blockReason(key), nil, 'the bundle renewed after an automatic top-up')
+    check(row(key).credit >= 10, 'credit after renewing')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('data meter: the server ignores pings while the phone is closed, and counts open-phone ones')
+do
+    local core = H.load(function(c) c.promotions = {}; c.billing.dataPerHeartbeatMB = 6 end)
+    local key = H.player(1, 100)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.callbacks['sd_carrier:dataHeartbeat'](1)
+    eq(core._.cache[key].data_mb_used, 6, 'counted when nothing is known')
+    H.fire('sd-phone:server:statebags:report', 1, { open = false })
+    H.advance(100)
+    H.callbacks['sd_carrier:dataHeartbeat'](1)
+    eq(core._.cache[key].data_mb_used, 6, 'ignored while the server knows the phone is closed')
+    H.fire('sd-phone:server:statebags:report', 1, { battery = 50 })
+    H.advance(100)
+    H.callbacks['sd_carrier:dataHeartbeat'](1)
+    eq(core._.cache[key].data_mb_used, 6, 'a report without "open" does not reopen it')
+    H.fire('sd-phone:server:statebags:report', 1, { open = true })
+    H.callbacks['sd_carrier:dataHeartbeat'](1)
+    eq(core._.cache[key].data_mb_used, 12, 'counted once it is open')
+    H.callbacks['sd_carrier:dataHeartbeat'](1)
+    eq(core._.cache[key].data_mb_used, 12, 'a second ping straight away is ignored')
+    H.advance(100)
+    H.fire('sd-phone:server:phone:setOpen', 1, false)
+    H.callbacks['sd_carrier:dataHeartbeat'](1)
+    eq(core._.cache[key].data_mb_used, 12, 'the setOpen event closes it too')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('throttled downloads report how long they should take')
+do
+    local core = H.load(function(c) c.promotions = {}; c.billing.outOfData = 'throttle'; c.billing.throttleKBps = 512; c.billing.throttleMaxSeconds = 60 end)
+    local key = H.player(1, 100)
+    H.call('selectPlan', 1, { planId = 'lite' })
+    for i = 1, 100 do H.callbacks['sd_carrier:dataHeartbeat'](1) H.advance(100) end
+    local res = H.exports.tryConsumeDownloadData(1, 10)
+    check(res.success and res.throttled, 'throttled')
+    eq(res.delayMs, 20000, '10 MB at 512 KB/s is 20 seconds')
+    res = H.exports.tryConsumeDownloadData(1, 500)
+    eq(res.delayMs, 60000, 'never longer than the cap')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('refunds')
+do
+    local core = H.load(function(c) c.promotions = {} end)
+    local key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.call('setAutoPay', 1, { on = true })
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)
+    eq(H.bank[1], 990, 'bill paid')
+    local bill = lastBill(key)
+    local ok, msg = core.refund(key, core._.cache[key], bill.id, 'bank')
+    check(ok, 'refunded')
+    eq(H.bank[1], 1000, 'money back to the bank')
+    ok, msg = core.refund(key, core._.cache[key], bill.id, 'bank')
+    check(not ok, 'a second refund is refused')
+    local last = H.store.history[#H.store.history]
+    eq(last.kind, 'refund', 'a refund line was recorded')
+
+    -- the payer is offline: it goes to their bank in the database
+    H.online[1] = nil
+    H.offlineBank['CID1'] = 10
+    H.advance(28 * DAY + 5)
+    core.sweepOnce()
+    eq(H.offlineBank['CID1'], 0, 'the second bill was auto-paid from the offline bank')
+    local second = lastBill(key)
+    ok = core.refund(key, core._.cache[key] or core.getRow(key), second.id, 'bank')
+    check(ok, 'refunded while the payer is offline')
+    eq(H.offlineBank['CID1'], 10, 'offline bank credited')
+
+    -- an unpaid bill is waived, not paid out
+    core = H.load(function(c) c.promotions = {} end)
+    key = H.player(1, 0)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.advance(28 * DAY + 5)
+    core.sweepOnce()
+    bill = lastBill(key)
+    eq(row(key).balance_due, 10, 'owes 10')
+    ok, msg = core.refund(key, core.getRow(key), bill.id, 'bank')
+    check(ok and msg:find('waived'), 'waived')
+    eq(row(key).balance_due, 0, 'nothing owed')
+    eq(row(key).status, 'current', 'back to normal')
+    eq(H.bank[1], 0, 'no money moved')
+
+    -- a top-up: credit must still be there
+    core = H.load(function(c) c.promotions = {} end)
+    key = H.player(1, 100)
+    H.call('selectPlan', 1, { planId = 'payg' })
+    H.call('topUp', 1, { amount = 20 })
+    local topup
+    for _, h in ipairs(H.store.history) do if h.kind == 'topup' then topup = h end end
+    H.handlers['sd-phone:server:call:ended']({ caller = { citizenid = key }, callee = { citizenid = 'x' }, duration = 60 * 100 })
+    ok = core.refund(key, core.getRow(key), topup.id, 'bank')
+    check(not ok, 'a top-up that has been spent cannot be refunded')
+    core.save(key, { credit = 25 })
+    ok = core.refund(key, core.getRow(key), topup.id, 'bank')
+    check(ok, 'but can once the credit is there')
+    near(row(key).credit, 5, 'credit taken back')
+    eq(H.bank[1], 100, 'and the bank is whole again')
+
+    -- bundle: not refundable; prepaid add-on goes back to credit
+    core = H.load(function(c) c.promotions = {} end)
+    key = H.player(1, 100)
+    H.call('topUp', 1, { amount = 20 })
+    H.call('selectPlan', 1, { planId = 'bundle30' })
+    local bundle
+    for _, h in ipairs(H.store.history) do if h.kind == 'bundle' then bundle = h end end
+    ok = core.refund(key, core.getRow(key), bundle.id, 'bank')
+    check(not ok, 'bundles are not refunded')
+    H.call('buyAddon', 1, { id = 'data1' })
+    local addon
+    for _, h in ipairs(H.store.history) do if h.kind == 'addon' then addon = h end end
+    local before = row(key).credit
+    ok = core.refund(key, core.getRow(key), addon.id, 'bank')
+    check(ok, 'prepaid add-on refunded')
+    near(row(key).credit, before + 5, 'to credit, because that is what paid for it')
+    check(not core.refund(key, core.getRow(key), 'nope', 'bank'), 'unknown entry')
+
+    -- bank refund fails when the payer is unknown
+    core = H.load(function(c) c.promotions = {}; c.payment.offlineAutoPay = false end)
+    key = H.player(1, 100)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.call('buyAddon', 1, { id = 'data1' })
+    local ad
+    for _, h in ipairs(H.store.history) do if h.kind == 'addon' then ad = h end end
+    H.online[1] = nil
+    ok, msg = core.refund(key, core.getRow(key), ad.id, 'bank')
+    check(not ok, 'no refund to an offline payer when offline money is switched off')
+    eq(H.store.getHistoryEntry(key, ad.id).refunded, 0, 'and the entry is not marked refunded')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('bulk promotions')
+do
+    local core = H.load(function(c) c.promotions = { { id = 'sorry', label = 'Sorry for the outage', kind = 'percent', value = 100, cycles = 1, enabled = false } } end)
+    local a, b, c3 = H.player(1, 100), H.player(2, 100), H.player(3, 100)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.call('selectPlan', 2, { planId = 'standard' })
+    H.call('selectPlan', 3, { planId = 'payg' })
+    local n = core.bulkPromo('sorry', 'postpaid')
+    eq(n, 2, 'two monthly accounts got it')
+    H.advance(28 * DAY + 5)
+    H.call('status', 1); H.call('status', 2)
+    eq(lastBill(a).amount, 0, 'first account: free bill (the cached account sees it too)')
+    eq(lastBill(b).amount, 0, 'second account: free bill')
+    eq(core.bulkPromo('sorry', 'postpaid'), 0, 'nobody gets it twice')
+    check(select(2, core.bulkPromo('nope', 'all')) ~= nil, 'unknown promotion')
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)
+    eq(lastBill(a).amount, 10, 'the next bill is normal')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('staff dashboard and the Discord summary')
+do
+    local core = H.load(function(c)
+        c.promotions = {}
+        c.admin.webhook.url = 'https://discord.example/hook'
+        c.admin.webhook.everyHours = 1
+    end)
+    local key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.call('setAutoPay', 1, { on = true })
+    H.player(2, 1000)
+    H.call('topUp', 2, { amount = 20 })
+    H.call('selectPlan', 2, { planId = 'bundle30' })     -- spends credit: not new money
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)                                   -- the bill is auto-paid: 10 in
+    local d = core.dashboard()
+    eq(d.accounts.postpaid, 1, 'one monthly account')
+    eq(d.accounts.bundle, 1, 'one bundle account')
+    near(d.revenue.month, 30, 'money in: the bill (10) and the top-up (20), not the bundle bought from credit')
+    near(d.credit, 12, 'credit held')
+    local lines = core.dashboardLines(d)
+    check(#lines >= 5, 'a handful of lines')
+    check(lines[2]:find('Money in'), 'money line')
+    -- refund subtracts
+    local bill = lastBill(key)
+    core.refund(key, core.getRow(key), bill.id, 'bank')
+    near(core.dashboard().revenue.month, 20, 'a refund comes off the money in')
+
+    -- commands
+    local said = {}
+    local oldprint = print
+    print = function(...) said[#said + 1] = table.concat({ ... }, ' ') end
+    H.commands['carrier'](0, { action = 'stats' })
+    H.commands['carrier'](0, { action = 'stats', target = 'send' })
+    print = oldprint
+    local joined = table.concat(said, '\n')
+    check(joined:find('Money in'), 'stats printed')
+    eq(#H.http, 1, 'one request to the webhook')
+    check(H.http[1].url == 'https://discord.example/hook' and H.http[1].method == 'POST', 'posted to the url')
+    check(H.http[1].body:find('summary') ~= nil, 'with the summary')
+
+    -- no webhook: nothing sent
+    core = H.load(function(c) c.promotions = {} end)
+    said = {}
+    print = function(...) said[#said + 1] = table.concat({ ... }, ' ') end
+    H.commands['carrier'](0, { action = 'stats', target = 'send' })
+    print = oldprint
+    eq(#H.http, 0, 'nothing is sent without a url')
+    check(table.concat(said, '\n'):find('webhook'), 'and it says why')
+
+    -- in game: a menu on the client
+    core = H.load(function(c) c.promotions = {} end)
+    H.player(1, 100)
+    H.commands['carrier'](1, { action = 'dash' })
+    local menu
+    for _, e in ipairs(H.events) do if e.name == 'sd_carrier:client:dash' then menu = e end end
+    check(menu and menu.src == 1 and #menu.payload.lines >= 5, 'the dashboard is sent to the player')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('staff: history, refund, extras, bulk promo and validate commands')
+do
+    local core = H.load(function(c) c.promotions = { { id = 'sorry', label = 'Sorry', kind = 'free', cycles = 1 } } end)
+    local key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.call('buyAddon', 1, { id = 'data1' })
+    local said = {}
+    local oldprint = print
+    print = function(...) said[#said + 1] = table.concat({ ... }, ' ') end
+    local cmd = H.commands['carrier']
+    cmd(0, { action = 'history', target = '1' })
+    local addon
+    for _, h in ipairs(H.store.history) do if h.kind == 'addon' then addon = h end end
+    check(table.concat(said, '\n'):find(addon.id, 1, true), 'history lists the entry id')
+    cmd(0, { action = 'refund', target = '1', value = addon.id })
+    check(H.store.getHistoryEntry(key, addon.id).refunded == 1, 'refund command works')
+    eq(H.bank[1], 1000, 'bank whole again')
+    cmd(0, { action = 'addextra', target = '1', value = 'minutes', extra = '50' })
+    eq(row(key).extra_minutes, 50, 'extra minutes')
+    cmd(0, { action = 'addextra', target = '1', value = 'texts', extra = '25' })
+    eq(row(key).extra_texts, 25, 'extra texts')
+    cmd(0, { action = 'adddata', target = '1', value = '100' })
+    eq(row(key).extra_data_mb, 1124, 'adddata still works (1024 bought + 100)')
+    cmd(0, { action = 'addextra', target = '1', value = 'coffee', extra = '1' })
+    cmd(0, { action = 'bulkpromo', target = 'sorry', value = 'all' })
+    eq(row(key).promo_id, 'sorry', 'bulk promo reached the account')
+    said = {}
+    cmd(0, { action = 'validate' })
+    check(table.concat(said, '\n'):find('looks fine') or table.concat(said, '\n'):find('warning'), 'validate answers')
+    cmd(0, { action = 'help' })
+    check(table.concat(said, '\n'):find('bulkpromo'), 'help lists the new commands')
+    print = oldprint
+    check(#H.store.audits >= 4, 'changes are audited')
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('config check')
+do
+    local core = H.load()
+    local issues = core.checkConfig()
+    local errors = 0
+    for _, i in ipairs(issues) do if i.level == 'error' then errors = errors + 1 print('    ' .. i.text) end end
+    eq(errors, 0, 'the shipped config has no errors')
+
+    core = H.load(function(c)
+        c.billing.plans[#c.billing.plans + 1] = { id = 'weird', label = 'x', type = 'sideways', price = 5 }
+        c.billing.plans[#c.billing.plans + 1] = { id = 'b2', label = 'b', type = 'bundle', price = 5 }
+        c.billing.outOfData = 'maybe'
+        c.billing.limitedAfterDays = 5
+        c.promotions = { { id = 'p', kind = 'percent', value = 150 }, { id = 'q', kind = 'free', startsAt = 'tomorrow' }, { id = 'q', kind = 'free' } }
+        c.prepaid.topUp.presets = { 1000 }
+        c.receipts = { delivery = 'custom' }
+        c.payment.account = 'bank; drop'
+        c.accountBy = 'whenever'
+        c.locale = 'xx'
+        c.billing.addons.list[#c.billing.addons.list + 1] = { id = 'zero', price = 1 }
+    end)
+    local text = {}
+    for _, i in ipairs(core.checkConfig()) do text[#text + 1] = i.text end
+    local all = table.concat(text, '\n')
+    for _, needle in ipairs({ 'unknown type', 'needs durationDays', 'outOfData must be', 'limitedAfterDays', 'percent is above 100', 'not a date',
+        'used twice', 'outside min and max', 'receipts.send', 'payment.account', 'accountBy', 'locales/', 'adds nothing' }) do
+        check(all:find(needle, 1, true) ~= nil, 'the check notices: ' .. needle)
+    end
+end
+
+-- ---------------------------------------------------------------------------------------------
+section('receipts: send to the phone')
+do
+    local core = H.load(function(c) c.promotions = {} end)
+    local key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)
+    local bill = lastBill(key)
+    local r = H.callbacks['sd_carrier:sendReceipt'](1, { id = bill.id })
+    check(r.ok and r.data.how == 'notification', 'a banner by default')
+    check(#H.notices('Receipt') == 1, 'one banner')
+    local text = core.receiptText(H.store.getHistoryEntry(key, bill.id), core.getRow(key))
+    check(text:find('AERO MOBILE') and text:find('TOTAL') and text:find('Basic plan'), 'receipt text')
+    r = H.callbacks['sd_carrier:sendReceipt'](1, { id = 'nope' })
+    check(not r.ok, 'unknown entry')
+
+    local got
+    core = H.load(function(c)
+        c.promotions = {}
+        c.receipts = { delivery = 'custom', send = function(src, subject, body, entry) got = { src = src, subject = subject, body = body, entry = entry } return true end }
+    end)
+    key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)
+    bill = lastBill(key)
+    r = H.callbacks['sd_carrier:sendReceipt'](1, { id = bill.id })
+    check(r.ok and r.data.how == 'custom' and got and got.src == 1 and got.entry.id == bill.id and got.body:find('TOTAL'), 'the custom sender gets the receipt')
+    eq(#H.notices('Receipt'), 0, 'and no banner')
+
+    core = H.load(function(c)
+        c.promotions = {}
+        c.receipts = { delivery = 'custom', send = function() error('boom') end }
+    end)
+    key = H.player(1, 1000)
+    H.call('selectPlan', 1, { planId = 'basic' })
+    H.advance(28 * DAY + 5)
+    H.call('status', 1)
+    r = H.callbacks['sd_carrier:sendReceipt'](1, { id = lastBill(key).id })
+    check(r.ok and r.data.how == 'notification', 'a failing sender falls back to the banner')
 end
 
 print(('\n%d passed, %d failed'):format(passed, failed))

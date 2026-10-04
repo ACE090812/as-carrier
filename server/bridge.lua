@@ -75,6 +75,25 @@ function CarrierBridge.removeMoney(source, account, amount)
     return true
 end
 
+--- Gives money to an online player's account (a refund).
+function CarrierBridge.addMoney(source, account, amount)
+    ensureCore()
+    if amount <= 0 then return true end
+    if framework == 'qb' and QBCore then
+        local Player = QBCore.Functions.GetPlayer(source)
+        return Player ~= nil and Player.Functions.AddMoney(account, amount, 'phone-refund') == true
+    elseif framework == 'qbx' and qbxExport then
+        local Player = qbxExport:GetPlayer(source)
+        return Player ~= nil and Player.Functions.AddMoney(account, amount, 'phone-refund') == true
+    elseif framework == 'esx' and ESX then
+        local xPlayer = ESX.GetPlayerFromId(source)
+        if not xPlayer then return false end
+        xPlayer.addAccountMoney(account, amount)
+        return true
+    end
+    return true
+end
+
 --- The server id of the online player behind a framework identifier (citizenid / ESX identifier), or nil.
 function CarrierBridge.getSourceByIdentifier(id)
     ensureCore()
@@ -100,22 +119,30 @@ local function safeAccount(account)
 end
 
 -- ESX keeps accounts as either {"bank":100,...} (Legacy) or [{"name":"bank","money":100},...] (older).
-local function esxTakeOffline(identifier, account, amount)
+-- `delta` is added to the account (negative takes money; it never takes more than there is).
+local function esxChangeOffline(identifier, account, delta)
     local raw = MySQL.scalar.await('SELECT accounts FROM users WHERE identifier = ?', { identifier })
     if type(raw) ~= 'string' or raw == '' then return false end
     local ok, accounts = pcall(json.decode, raw)
     if not ok or type(accounts) ~= 'table' then return false end
 
+    local function apply(current)
+        if current + delta < -0.00001 then return nil end
+        return math.floor((current + delta) * 100 + 0.5) / 100
+    end
+
     local done = false
     if accounts[account] ~= nil and type(accounts[account]) == 'number' then
-        if accounts[account] < amount then return false end
-        accounts[account] = math.floor((accounts[account] - amount) * 100 + 0.5) / 100
+        local new = apply(accounts[account])
+        if new == nil then return false end
+        accounts[account] = new
         done = true
     else
         for _, a in ipairs(accounts) do
             if type(a) == 'table' and a.name == account then
-                if (tonumber(a.money) or 0) < amount then return false end
-                a.money = math.floor(((tonumber(a.money) or 0) - amount) * 100 + 0.5) / 100
+                local new = apply(tonumber(a.money) or 0)
+                if new == nil then return false end
+                a.money = new
                 done = true
                 break
             end
@@ -143,7 +170,25 @@ function CarrierBridge.removeMoneyOffline(identifier, account, amount)
         ]]):format(account, balance, account, balance), { amount, identifier, amount })
         return (changed or 0) > 0
     elseif framework == 'esx' then
-        return esxTakeOffline(identifier, account, amount)
+        return esxChangeOffline(identifier, account, -amount)
+    end
+    return true
+end
+
+--- Gives money to the bank of a character who is NOT online, straight in the database (a refund).
+function CarrierBridge.addMoneyOffline(identifier, account, amount)
+    if amount <= 0 then return true end
+    if type(identifier) ~= 'string' or identifier == '' or not safeAccount(account) then return false end
+
+    if framework == 'qb' or framework == 'qbx' then
+        local balance = ('CAST(JSON_UNQUOTE(JSON_EXTRACT(money, \'$.%s\')) AS DECIMAL(15,2))'):format(account)
+        local changed = MySQL.update.await(([[
+            UPDATE players SET money = JSON_SET(money, '$.%s', ROUND(%s + ?, 2))
+            WHERE citizenid = ? AND JSON_EXTRACT(money, '$.%s') IS NOT NULL
+        ]]):format(account, balance, account), { amount, identifier })
+        return (changed or 0) > 0
+    elseif framework == 'esx' then
+        return esxChangeOffline(identifier, account, amount)
     end
     return true
 end

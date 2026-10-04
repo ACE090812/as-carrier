@@ -218,6 +218,7 @@
     .credit .a { font-size: 28px; font-weight: 800; margin-top: 1px; }
     .credit.low .a { color: var(--red); }
     .btn.sm { padding: 9px 18px; font-size: 14px; }
+    .lnk-sm { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; color: var(--accent); font-weight: 600; }
     .btn.ghost { background: var(--card2); color: var(--text); }
     .add-row { display: flex; gap: 10px; margin-top: 10px; }
     .add-row .btn { flex: 1; text-align: center; border-radius: 14px; padding: 12px; font-size: 14px; }
@@ -321,6 +322,8 @@
     var promoCode = '';
     var topupAmount = '';
     var pauseDays = '';
+    var autoAmount = '';
+    var autoBelow = '';
 
     function post(endpoint, data) {
         return fetch('https://' + RESOURCE + '/' + endpoint, {
@@ -435,6 +438,12 @@
         for (var i = 0; i < S.plans.length; i++) if (S.plans[i].id === id) return S.plans[i];
         return null;
     }
+    // What a plan includes right now: the plan's own allowance plus any add-ons (-1 = unlimited).
+    function allowance(what) {
+        var base = what === 'minutes' ? S.plan.minutes : what === 'texts' ? S.plan.texts : S.plan.dataMB;
+        if (base < 0) return -1;
+        return base + (what === 'minutes' ? (S.extraMinutes || 0) : what === 'texts' ? (S.extraTexts || 0) : (S.extraDataMB || 0));
+    }
     function offerFor(p) { return S.offers && S.offers[p.id]; }
 
     function priceBlock(p) {
@@ -465,9 +474,16 @@
             (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>' +
             '<button class="btn" data-act="pay"' + (busy ? ' disabled' : '') + '>' + L('ui.payNow', 'Pay now') + '</button></div>';
     }
+    function autoTopText() {
+        var a = S.autoTopUp;
+        if (a && a.amount > 0) return L('ui.autoTopOn', '%s when credit is %s or less', raw(fmt(a.amount)), raw(fmt(a.below)));
+        return L('ui.autoTopOff', 'Off · tops up your credit for you');
+    }
     function creditCard() {
         var low = S.credit <= 0;
-        return '<div class="credit' + (low ? ' low' : '') + '"><div><div class="t">' + L('ui.credit', 'Credit') + '</div><div class="a num">' + fmt(S.credit) + '</div></div>' +
+        var auto = (S.autoTopUp && S.autoTopUp.enabled)
+            ? '<button class="lnk-sm" data-act="autoTopOpen">' + icon('i-clock') + ' ' + L('ui.autoTopUp', 'Auto top-up') + ': ' + (S.autoTopUp.amount > 0 ? L('ui.on', 'On') : L('ui.off', 'Off')) + '</button>' : '';
+        return '<div class="credit' + (low ? ' low' : '') + '"><div><div class="t">' + L('ui.credit', 'Credit') + '</div><div class="a num">' + fmt(S.credit) + '</div>' + auto + '</div>' +
             '<button class="btn sm" data-act="topupOpen">' + L('ui.topUp', 'Top up') + '</button></div>';
     }
 
@@ -608,15 +624,18 @@
                 '<div class="li"><span>' + L('ui.data', 'Data') + '</span><span class="mut num">' + mbText(S.dataMBUsed) + '</span></div></div>';
             h += '<div class="hint">' + L('ui.paygHint', 'Calls, texts and data are taken from your credit at your plan rates.') + '</div>';
         } else {
-            var dataInc = S.plan.dataMB < 0 ? -1 : S.plan.dataMB + (S.extraDataMB || 0);
             h += '<div class="rings">' +
-                ring(S.minutesUsed, S.plan.minutes, L('ui.minutes', 'Minutes'), 'var(--blue)', 'i-phone', false) +
-                ring(S.textsUsed, S.plan.texts, L('ui.texts', 'Texts'), 'var(--green)', 'i-msg', false) +
-                ring(S.dataMBUsed, dataInc, L('ui.data', 'Data'), 'var(--orange)', 'i-data', true) + '</div>';
+                ring(S.minutesUsed, allowance('minutes'), L('ui.minutes', 'Minutes'), 'var(--blue)', 'i-phone', false) +
+                ring(S.textsUsed, allowance('texts'), L('ui.texts', 'Texts'), 'var(--green)', 'i-msg', false) +
+                ring(S.dataMBUsed, allowance('data'), L('ui.data', 'Data'), 'var(--orange)', 'i-data', true) + '</div>';
         }
-        if (S.extraDataMB > 0) h += '<div class="hint">' + L('ui.addonActive', 'Includes %s of add-on data.', mbText(S.extraDataMB)) + '</div>';
-        if ((S.plan.type === 'payg' || S.plan.dataMB >= 0) && S.addons && S.addons.length && !S.paused && S.status !== 'suspended') {
-            h += '<div class="add-row"><button class="btn ghost" data-act="addonOpen">' + icon('i-plus') + ' ' + L('ui.addData', 'Add data') + '</button></div>';
+        var extras = [];
+        if (S.extraDataMB > 0) extras.push(mbText(S.extraDataMB));
+        if (S.extraMinutes > 0) extras.push(L('ui.nMin', '%s min', S.extraMinutes));
+        if (S.extraTexts > 0) extras.push(L('ui.nTexts', '%s texts', S.extraTexts));
+        if (extras.length) h += '<div class="hint">' + L('ui.addonActiveList', 'Includes add-ons: %s.', raw(extras.join(', '))) + '</div>';
+        if (S.addons && S.addons.length && !S.paused && S.status !== 'suspended') {
+            h += '<div class="add-row"><button class="btn ghost" data-act="addonOpen">' + icon('i-plus') + ' ' + L('ui.addExtras', 'Add extras') + '</button></div>';
         }
 
         h += '<div class="list">';
@@ -677,8 +696,11 @@
                 '<small>' + (canPause ? L('ui.pauseSub', 'Switch off and stop billing for up to %s days', S.pauseCfg.maxDays)
                     : (S.balanceDue > 0 ? L('ui.pauseOwing', 'Pay your bill first') : L('ui.pauseContract', 'Not available during a contract'))) + '</small></span>' + icon('i-chev') + '</button>';
         }
-        if (S.addons && S.addons.length && (S.plan.type === 'payg' || S.plan.dataMB >= 0)) {
-            h += '<button class="row-btn" data-act="addonOpen"><span>' + L('ui.addData', 'Add data') + '<small>' + L('ui.addDataSub', 'Extra data for this cycle') + '</small></span>' + icon('i-chev') + '</button>';
+        if (S.addons && S.addons.length) {
+            h += '<button class="row-btn" data-act="addonOpen"><span>' + L('ui.addExtras', 'Add extras') + '<small>' + L('ui.addExtrasSub', 'Extra data, minutes or texts for this cycle') + '</small></span>' + icon('i-chev') + '</button>';
+        }
+        if (S.autoTopUp && S.autoTopUp.enabled && (isPrepaid(S.plan) || S.credit > 0)) {
+            h += '<button class="row-btn" data-act="autoTopOpen"><span>' + L('ui.autoTopUp', 'Auto top-up') + '<small>' + autoTopText() + '</small></span>' + icon('i-chev') + '</button>';
         }
         if (isPrepaid(S.plan) || S.credit > 0) {
             h += '<button class="row-btn" data-act="topupOpen"><span>' + L('ui.topUp', 'Top up') + '<small>' + L('ui.creditNow', 'Credit: %s', raw(fmt(S.credit))) + '</small></span>' + icon('i-chev') + '</button>';
@@ -724,8 +746,7 @@
         });
         var mid = vals[Math.floor(vals.length / 2)];
         var used = metric === 'data' ? S.dataMBUsed : metric === 'minutes' ? S.minutesUsed : S.textsUsed;
-        var dataInc = S.plan && S.plan.dataMB < 0 ? -1 : (S.plan ? S.plan.dataMB + (S.extraDataMB || 0) : 0);
-        var inc = metric === 'data' ? dataInc : metric === 'minutes' ? (S.plan ? S.plan.minutes : 0) : (S.plan ? S.plan.texts : 0);
+        var inc = S.plan ? allowance(metric === 'data' ? 'data' : metric) : 0;
 
         var h = '<div class="safe-top"></div><div class="ttl">' + L('ui.usageTitle', 'Usage') + '</div><div class="scroll" id="scroll" style="padding-top:12px">';
         h += '<div class="seg">' +
@@ -760,11 +781,12 @@
     }
     function entryLabel(h) {
         if (h.kind === 'bill') { var p = planById(h.planId); return p ? p.label : (h.label || h.planId); }
-        if (h.kind === 'topup') return L('ui.topUpLabel', 'Top up');
+        if (h.kind === 'topup') return h.label || L('ui.topUpLabel', 'Top up');
+        if (h.kind === 'refund') return L('ui.refundLabel', 'Refund');
         return h.label || '';
     }
     function entryIcon(h) {
-        if (h.kind === 'topup' || h.kind === 'adjust') return { ico: 'i-plus', cls: ' b' };
+        if (h.kind === 'topup' || h.kind === 'adjust' || h.kind === 'refund') return { ico: 'i-plus', cls: ' b' };
         if (h.kind === 'addon') return { ico: 'i-data', cls: ' b' };
         if (h.kind === 'bundle') return { ico: 'i-plan', cls: ' b' };
         if (h.kind === 'fee') return { ico: h.paid ? 'i-check' : 'i-warn', cls: h.paid ? ' o' : ' u' };
@@ -817,7 +839,7 @@
             S.history.forEach(function (b) {
                 var open = openBill === b.id;
                 var ic = entryIcon(b);
-                var sign = (b.kind === 'topup' || b.kind === 'adjust') ? '+' : '';
+                var sign = (b.kind === 'topup' || b.kind === 'adjust' || b.kind === 'refund') ? '+' : '';
                 h += '<button class="bill" data-act="bill" data-id="' + esc(b.id) + '">' +
                     '<div class="ico' + ic.cls + '">' + icon(ic.ico) + '</div>' +
                     '<div class="m">' + entryName(b) + '<small>' + esc(entryLabel(b)) + '</small></div>' +
@@ -974,15 +996,38 @@
         return sheetShell(out);
     }
 
+    function addonPerks(a) {
+        var parts = [];
+        if (a.dataMB > 0) parts.push(mbText(a.dataMB));
+        if (a.minutes > 0) parts.push(L('ui.nMin', '%s min', a.minutes));
+        if (a.texts > 0) parts.push(L('ui.nTexts', '%s texts', a.texts));
+        return parts.join(' + ');
+    }
     function viewAddonSheet() {
         var pre = isPrepaid(S.plan);
-        var out = '<h3>' + L('ui.addData', 'Add data') + '</h3><p>' + L('ui.addonBody', 'Extra data for this cycle only. %s', raw(esc(pre
+        var out = '<h3>' + L('ui.addExtras', 'Add extras') + '</h3><p>' + L('ui.addonBody', 'Extra data, minutes or texts for this cycle only. %s', raw(esc(pre
             ? L2('ui.addonFromCredit', 'It comes out of your credit.') : L2('ui.addonFromBank', 'It is charged to your bank now.')))) + '</p>';
         (S.addons || []).forEach(function (a) {
             var cant = pre && S.credit < a.price;
-            out += '<button class="opt" data-act="addonBuy" data-id="' + esc(a.id) + '"' + (busy || cant ? ' disabled' : '') + '><span><b>' + esc(a.label) + '</b><small>' + mbText(a.dataMB) + '</small></span><span class="pr num">' + fmtPrice(a.price) + '</span></button>';
+            out += '<button class="opt" data-act="addonBuy" data-id="' + esc(a.id) + '"' + (busy || cant ? ' disabled' : '') + '><span><b>' + esc(a.label) + '</b><small>' + addonPerks(a) + '</small></span><span class="pr num">' + fmtPrice(a.price) + '</span></button>';
         });
         if (pre) out += '<div class="fine">' + L('ui.creditNow', 'Credit: %s', raw(fmt(S.credit))) + '</div>';
+        return sheetShell(out);
+    }
+
+    function viewAutoTopSheet() {
+        var a = S.autoTopUp || {};
+        var out = '<h3>' + L('ui.autoTopUp', 'Auto top-up') + '</h3><p>' + L('ui.autoTopBody', 'When your credit drops to the level you choose, we take the amount you choose from your bank and add it. If your bank can not pay, we tell you and try again later.') + '</p>';
+        out += '<div class="cap" style="padding:14px 4px 0;text-align:center">' + L('ui.autoTopAmount', 'Add this much') + '</div><div class="chips" style="margin-top:6px">' +
+            (a.amounts || []).map(function (v) {
+                return '<button class="chip' + (String(autoAmount) === String(v) ? ' on' : '') + '" data-act="autoAmount" data-v="' + v + '">' + fmtPrice(v) + '</button>';
+            }).join('') + '</div>';
+        out += '<div class="cap" style="padding:14px 4px 0;text-align:center">' + L('ui.autoTopBelow', 'When credit is this or less') + '</div><div class="chips" style="margin-top:6px">' +
+            [0].concat(a.belowOptions || []).map(function (v) {
+                return '<button class="chip' + (String(autoBelow) === String(v) ? ' on' : '') + '" data-act="autoBelow" data-v="' + v + '">' + (v === 0 ? L('ui.runsOut', 'Runs out') : fmtPrice(v)) + '</button>';
+            }).join('') + '</div>';
+        out += '<div style="height:14px"></div>' + confirmBtn(a.amount > 0 ? L('ui.save', 'Save') : L('ui.turnOn', 'Turn on'), 'autoTopConfirm');
+        if (a.amount > 0) out += '<button class="cancel" style="color:var(--red)" data-act="autoTopOff">' + L('ui.turnOff', 'Turn off') + '</button>';
         return sheetShell(out);
     }
 
@@ -1020,7 +1065,8 @@
         return '<div class="dim" data-act="closeSheet"></div><div class="sheet"><div class="grab"></div><h3>' + L('ui.receipt', 'Receipt') + '</h3>' +
             '<div class="receipt">' + esc(receiptText(b)) + '</div>' +
             '<div class="two"><button class="btn ghost" data-act="copyReceipt" data-id="' + esc(b.id) + '">' + L('ui.copy', 'Copy') + '</button>' +
-            '<button class="btn blue" data-act="saveReceipt" data-id="' + esc(b.id) + '">' + L('ui.download', 'Download') + '</button></div>' +
+            '<button class="btn ghost" data-act="saveReceipt" data-id="' + esc(b.id) + '">' + L('ui.download', 'Download') + '</button></div>' +
+            '<button class="btn blue full" style="margin-top:10px" data-act="sendReceipt" data-id="' + esc(b.id) + '"' + (busy ? ' disabled' : '') + '>' + L('ui.sendReceipt', 'Send to my phone') + '</button>' +
             '<div class="fine">' + L('ui.receiptHint', 'If nothing downloads, use Copy and paste it into a note.') + '</div>' +
             '<button class="cancel" data-act="closeSheet">' + L('ui.close', 'Close') + '</button></div>';
     }
@@ -1030,6 +1076,7 @@
         if (sheet.kind === 'plan') return viewPlanSheet();
         if (sheet.kind === 'topup') return viewTopupSheet();
         if (sheet.kind === 'addon') return viewAddonSheet();
+        if (sheet.kind === 'autotop') return viewAutoTopSheet();
         if (sheet.kind === 'pause') return viewPauseSheet();
         if (sheet.kind === 'cancel') return viewCancelSheet();
         if (sheet.kind === 'receipt') return viewReceiptSheet();
@@ -1173,6 +1220,29 @@
             run('topUp', { amount: amt }, function () { return L('ui.toastToppedUp', 'Topped up. Credit is %s.', raw(fmt(S.credit))); }, L('err.paymentFailed', 'Payment failed'));
         }
         else if (act === 'addonOpen') { sheet = { kind: 'addon' }; render(); }
+        else if (act === 'autoTopOpen') {
+            var at = S.autoTopUp || {};
+            autoAmount = at.amount > 0 ? String(at.amount) : String((at.amounts && (at.amounts[1] || at.amounts[0])) || '');
+            autoBelow = at.amount > 0 ? String(at.below) : String((at.belowOptions && at.belowOptions[0]) || 0);
+            sheet = { kind: 'autotop' }; render();
+        }
+        else if (act === 'autoAmount') { autoAmount = el.getAttribute('data-v'); render(); }
+        else if (act === 'autoBelow') { autoBelow = el.getAttribute('data-v'); render(); }
+        else if (act === 'autoTopConfirm') {
+            var am = parseFloat(autoAmount);
+            if (!(am > 0)) { say(plain(L('err.enterAmount', 'Enter an amount')), true); return; }
+            run('setAutoTopUp', { amount: am, below: parseFloat(autoBelow) || 0 }, L('ui.toastAutoTopOn', 'Auto top-up is on.'), L('err.paymentFailed', 'Payment failed'));
+        }
+        else if (act === 'autoTopOff') { run('setAutoTopUp', { amount: 0, below: 0 }, L('ui.toastAutoTopOff', 'Auto top-up is off.'), L('err.paymentFailed', 'Payment failed')); }
+        else if (act === 'sendReceipt') {
+            if (busy) return;
+            busy = true; render();
+            post('sd_carrier/sendReceipt', { id: el.getAttribute('data-id') }).then(function (res) {
+                busy = false;
+                say((res && res.ok) ? plain(L('ui.toastSent', 'Receipt sent to your phone.')) : ((res && res.error) || plain(L('ui.toastSendFailed', "Couldn't send the receipt."))), !(res && res.ok));
+                render();
+            });
+        }
         else if (act === 'addonBuy') { run('buyAddon', { id: el.getAttribute('data-id') }, L('ui.toastAddon', 'Data added.'), L('err.paymentFailed', 'Payment failed')); }
         else if (act === 'pauseOpen') { if (!pauseDays) pauseDays = String(Math.min(14, (S.pauseCfg && S.pauseCfg.maxDays) || 14)); sheet = { kind: 'pause' }; render(); }
         else if (act === 'pauseDays') { pauseDays = el.getAttribute('data-days'); render(); }
@@ -1200,17 +1270,6 @@
         }
     });
 
-    // ---- data heartbeat (only counts while a plan is on and service isn't blocked) ----
-    var heartbeatTimer = null;
-    function startHeartbeat(seconds) {
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-        heartbeatTimer = setInterval(function () {
-            if (document.visibilityState !== 'visible') return;
-            if (!S || !S.chosen || S.blocked || S.dataState === 'blocked') return;
-            post('sd_carrier/dataHeartbeat');
-        }, (seconds || 60) * 1000);
-    }
-
     var shown = false;
     function showApp() {
         if (shown) return;
@@ -1224,7 +1283,6 @@
         });
         post('sd_carrier/config').then(function (cfg) {
             if (cfg && cfg.currency) { cur = cfg.currency; render(); }
-            startHeartbeat((cfg && cfg.dataHeartbeatSeconds) || 60);
         });
     }
 

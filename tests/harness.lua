@@ -61,6 +61,16 @@ function TriggerEvent(name, ...) H.localEvents[#H.localEvents + 1] = { name = na
 H.handlers, H.callbacks, H.exports, H.commands = {}, {}, {}, {}
 function AddEventHandler(name, fn) H.handlers[name] = fn end
 function RegisterNetEvent() end
+--- fires a server event as if the given player's client had sent it (FiveM sets the global `source`)
+function H.fire(name, src, ...)
+    local old = source
+    source = src
+    local ok, err = pcall(H.handlers[name], ...)
+    source = old
+    if not ok then error(err, 0) end
+end
+H.http = {}
+function PerformHttpRequest(url, cb, method, body, headers) H.http[#H.http + 1] = { url = url, method = method, body = body, headers = headers } if cb then cb(204) end end
 function RegisterCommand() end
 function exports(name, fn) H.exports[name] = fn end
 lib = { callback = { register = function(name, fn) H.callbacks[name] = fn end },
@@ -80,6 +90,15 @@ function CarrierBridge.removeMoney(src, acct, amount)
     if (H.bank[src] or 0) < amount then return false end
     H.bank[src] = H.bank[src] - amount
     H.charged[#H.charged + 1] = { src = src, amount = amount }
+    return true
+end
+function CarrierBridge.addMoney(src, acct, amount)
+    if not H.online[src] then return false end
+    H.bank[src] = (H.bank[src] or 0) + amount
+    return true
+end
+function CarrierBridge.addMoneyOffline(id, acct, amount)
+    H.offlineBank[id] = (H.offlineBank[id] or 0) + amount
     return true
 end
 function CarrierBridge.removeMoneyOffline(id, acct, amount)
@@ -102,7 +121,8 @@ function S.insertAccount(key, plan, cs, due)
     if S.accounts[key] then return end
     S.accounts[key] = { citizenid = key, plan_id = plan, cycle_start = cs, due_at = due, auto_pay = 0, status = 'current',
         minutes_used = 0, texts_used = 0, data_mb_used = 0, balance_due = 0, plan_chosen = 0, credit = 0, extra_data_mb = 0,
-        promo_cycles_left = 0, promos_used = '', late_fee_applied = 0, alert_bits = 0 }
+        promo_cycles_left = 0, promos_used = '', late_fee_applied = 0, alert_bits = 0,
+        extra_minutes = 0, extra_texts = 0, auto_topup_amount = 0, auto_topup_below = 0 }
 end
 function S.save(key, fields)
     local r = S.accounts[key]
@@ -124,7 +144,8 @@ function S.insertHistory(key, e)
     seq = seq + 1
     local row = { id = e.id or ('h' .. seq), citizenid = key, plan_id = e.planId or '', amount = e.amount or 0,
         cycle_start = e.cycleStart, paid = e.paid and 1 or 0, paid_at = e.paid and (e.paidAt or e.at) or nil,
-        kind = e.kind or 'bill', label = e.label or '', items = e.items, at = e.at or os.time(), seq = seq }
+        kind = e.kind or 'bill', label = e.label or '', items = e.items, at = e.at or os.time(), seq = seq,
+        pay = e.pay == 'credit' and 'credit' or 'bank', refunded = 0 }
     S.history[#S.history + 1] = row
     return row.id
 end
@@ -137,6 +158,68 @@ function S.listHistory(key, limit)
     table.sort(o, function(a, b) return a.seq > b.seq end)
     while #o > (limit or 12) do o[#o] = nil end
     return o
+end
+function S.getHistoryEntry(key, id)
+    for _, h in ipairs(S.history) do if h.citizenid == key and h.id == id then return copy(h) end end
+end
+function S.markRefunded(key, id, at)
+    for _, h in ipairs(S.history) do
+        if h.citizenid == key and h.id == id and h.refunded ~= 1 then
+            h.refunded = 1
+            if h.paid == 0 then h.paid, h.paid_at = 1, at end
+            return true
+        end
+    end
+    return false
+end
+function S.bulkPromo(promoId, cycles, scope, postpaid, prepaid)
+    local ids = {}
+    if scope == 'postpaid' or scope == 'all' then for _, id in ipairs(postpaid) do ids[id] = true end end
+    if scope == 'prepaid' or scope == 'all' then for _, id in ipairs(prepaid) do ids[id] = true end end
+    local n = 0
+    for _, r in pairs(S.accounts) do
+        local used = false
+        for tok in (r.promos_used or ''):gmatch('[^,]+') do if tok == promoId then used = true end end
+        if r.plan_chosen == 1 and ids[r.plan_id] and not used and (not r.promo_id or r.promo_cycles_left == 0) then
+            r.promo_id, r.promo_cycles_left = promoId, cycles
+            r.promos_used = (r.promos_used == '' and '' or r.promos_used .. ',') .. promoId
+            n = n + 1
+        end
+    end
+    return n
+end
+function S.stats(now, plans)
+    local out = { accounts = { postpaid = 0, payg = 0, bundle = 0, none = 0 }, byPlan = {}, overdue = 0, owed = 0, suspended = 0, paused = 0, credit = 0,
+        revenue = { day = 0, week = 0, month = 0, byKind = {} }, activeWeek = 0, topData = {} }
+    for _, r in pairs(S.accounts) do
+        if r.plan_chosen == 1 then
+            local kind = plans[r.plan_id] or 'postpaid'
+            out.accounts[kind] = out.accounts[kind] + 1
+            out.byPlan[r.plan_id] = (out.byPlan[r.plan_id] or 0) + 1
+        else out.accounts.none = out.accounts.none + 1 end
+        if r.balance_due > 0 then out.overdue = out.overdue + 1 out.owed = out.owed + r.balance_due end
+        if r.status == 'suspended' then out.suspended = out.suspended + 1 end
+        if r.paused_at then out.paused = out.paused + 1 end
+        out.credit = out.credit + r.credit
+    end
+    for _, h in ipairs(S.history) do
+        if h.paid == 1 and h.pay == 'bank' and h.kind ~= 'adjust' and h.paid_at and h.paid_at >= now - 30 * 86400 then
+            local sign = h.kind == 'refund' and -1 or 1
+            out.revenue.month = out.revenue.month + sign * h.amount
+            if h.paid_at >= now - 7 * 86400 then out.revenue.week = out.revenue.week + sign * h.amount end
+            if h.paid_at >= now - 86400 then out.revenue.day = out.revenue.day + sign * h.amount end
+        end
+    end
+    local seen, per = {}, {}
+    for key, days in pairs(S.daily) do
+        for day, e in pairs(days) do
+            if day >= math.floor(now / 86400) - 6 then seen[key] = true per[key] = (per[key] or 0) + e.data_mb end
+        end
+    end
+    for k in pairs(seen) do out.activeWeek = out.activeWeek + 1 out.topData[#out.topData + 1] = { key = k, mb = per[k] } end
+    table.sort(out.topData, function(a, b) return a.mb > b.mb end)
+    while #out.topData > 5 do out.topData[#out.topData] = nil end
+    return out
 end
 function S.addDaily(key, day, m, t, d)
     S.daily[key] = S.daily[key] or {}
@@ -167,7 +250,7 @@ function H.load(tweak)
     H.callbacks, H.handlers, H.exports, H.commands = {}, {}, {}, {}
     threads = {}
     S.accounts, S.history, S.daily, S.audits = {}, {}, {}, {}
-    H.events, H.localEvents, H.bank, H.offlineBank, H.charged, H.online = {}, {}, {}, {}, {}, {}
+    H.events, H.localEvents, H.bank, H.offlineBank, H.charged, H.online, H.http = {}, {}, {}, {}, {}, {}, {}
     H.NOW = 1700000000
     H.core = dofile('server/core.lua')
     package.loaded['server.core'] = H.core

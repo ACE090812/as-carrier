@@ -5,7 +5,7 @@ lua54 'yes'
 name 'as-carrier'
 author 'you'
 description 'Standalone Carrier/phone-bill app, registered into sd-phone through its real addCustomApp API - no sd-phone core files touched.'
-version '1.1.0'
+version '1.2.0'
 
 -- ox_lib gives us lib.callback for the client<->server bridge (status/selectPlan/setAutoPay/
 -- payBill/dataHeartbeat) - sd-phone already depends on it, so it's assumed present.

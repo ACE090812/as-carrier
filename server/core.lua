@@ -19,6 +19,7 @@ local DAY = 86400
 local PLANS, PLAN_LIST = {}, {}
 for _, p in ipairs(billingCfg.plans or {}) do
     if p.id then
+        p._rawType = p.type
         p.type = (p.type == 'payg' or p.type == 'bundle') and p.type or 'postpaid'
         if p.type == 'payg' then
             p.price = p.price or 0
@@ -55,46 +56,176 @@ local function isPrepaidKind(kind) return kind == 'payg' or kind == 'bundle' end
 local function planFor(id) return PLANS[id] or PLANS[PLACEHOLDER_PLAN] end
 core.kindOf, core.isPrepaidKind, core.planFor = kindOf, isPrepaidKind, planFor
 
---- Prints anything in config.lua that is likely a mistake.
-function core.validateConfig()
-    local seen = {}
+local parseTime   -- defined with the promotions below
+
+--- Looks for mistakes in config.lua. Returns a list of { level = 'error' | 'warning', text = '...' }.
+function core.checkConfig()
+    local out = {}
+    local function add(level, text, ...) out[#out + 1] = { level = level, text = select('#', ...) > 0 and text:format(...) or text } end
+
+    -- plans
+    local seen, planCount = {}, 0
     for _, p in ipairs(billingCfg.plans or {}) do
-        if not p.id then print('[as-carrier] config: a plan has no id and is ignored')
+        if not p.id then add('error', 'a plan has no id and is ignored')
         else
-            if seen[p.id] then print(('[as-carrier] config: plan id "%s" is used twice'):format(p.id)) end
+            planCount = planCount + 1
+            if seen[p.id] then add('error', 'plan id "%s" is used twice', p.id) end
             seen[p.id] = true
-            if (tonumber(p.price) or 0) < 0 then print(('[as-carrier] config: plan "%s" has a negative price'):format(p.id)) end
-            if p.type == 'bundle' and (tonumber(p.durationDays) or 0) <= 0 then
-                print(('[as-carrier] config: bundle "%s" needs durationDays'):format(p.id))
+            if p.label == nil then add('warning', 'plan "%s" has no label', p.id) end
+            if (tonumber(p.price) or 0) < 0 then add('error', 'plan "%s" has a negative price', p.id) end
+            local raw = p._rawType
+            if raw ~= nil and raw ~= 'payg' and raw ~= 'bundle' and raw ~= 'postpaid' then
+                add('error', 'plan "%s" has an unknown type "%s" (use payg, bundle or leave it out)', p.id, tostring(raw))
             end
-            if p.type ~= 'payg' and p.type ~= 'bundle' and (tonumber(p.price) or 0) <= 0 and p.price ~= nil then
-                print(('[as-carrier] config: postpaid plan "%s" is free'):format(p.id))
+            if p.type == 'bundle' then
+                if (tonumber(p.durationDays) or 0) <= 0 then add('error', 'bundle "%s" needs durationDays', p.id) end
+                if (tonumber(p.price) or 0) <= 0 then add('warning', 'bundle "%s" is free', p.id) end
+            elseif p.type ~= 'payg' then
+                if p.price == nil then add('error', 'plan "%s" has no price', p.id)
+                elseif (tonumber(p.price) or 0) <= 0 then add('warning', 'monthly plan "%s" is free', p.id) end
+            end
+            if p.contractCycles ~= nil and ((tonumber(p.contractCycles) or -1) < 0 or (p.type and p.type ~= 'postpaid')) then
+                add('warning', 'plan "%s": contractCycles only makes sense on a monthly plan, as a positive number', p.id)
+            end
+            for _, f in ipairs({ 'overagePerMinute', 'overagePerText', 'overagePerMB' }) do
+                if p[f] ~= nil and (tonumber(p[f]) or -1) < 0 then add('error', 'plan "%s": %s must not be negative', p.id, f) end
+            end
+            if p.outOfData ~= nil and p.outOfData ~= 'bill' and p.outOfData ~= 'throttle' and p.outOfData ~= 'block' then
+                add('error', 'plan "%s": outOfData must be bill, throttle or block', p.id)
+            end
+            if p.type == 'payg' then
+                for _, f in ipairs({ 'overagePerMinute', 'overagePerText', 'overagePerMB' }) do
+                    if (tonumber(p[f]) or 0) <= 0 then add('warning', 'pay-as-you-go plan "%s" has no %s, so that is free', p.id, f) end
+                end
             end
         end
     end
-    if not PLACEHOLDER_PLAN then print('[as-carrier] config: there are no plans') end
-    if (tonumber(billingCfg.cycleDays) or 28) < 1 then print('[as-carrier] config: cycleDays must be at least 1') end
+    if planCount == 0 then add('error', 'there are no plans') end
+
+    -- billing
+    if (tonumber(billingCfg.cycleDays) or 28) < 1 then add('error', 'cycleDays must be at least 1') end
     if LIMITED_SECONDS > 0 and LIMITED_SECONDS >= GRACE_SECONDS then
-        print('[as-carrier] config: limitedAfterDays should be smaller than graceDays, the limited step will be skipped')
+        add('warning', 'limitedAfterDays (%s) should be smaller than graceDays (%s): the data-off step is skipped',
+            tostring(billingCfg.limitedAfterDays), tostring(billingCfg.graceDays))
     end
-    for _, a in ipairs((billingCfg.addons or {}).list or {}) do
-        if not a.id or (tonumber(a.dataMB) or 0) <= 0 or (tonumber(a.price) or -1) < 0 then
-            print('[as-carrier] config: an add-on needs an id, a positive dataMB and a price')
+    local lf = billingCfg.lateFee or {}
+    if lf.enabled == true then
+        if (tonumber(lf.amount) or 0) <= 0 and (tonumber(lf.percent) or 0) <= 0 then add('warning', 'the late fee is on but has no amount or percent') end
+        if (tonumber(lf.afterDays) or 1) * DAY >= GRACE_SECONDS and GRACE_SECONDS > 0 then
+            add('warning', 'lateFee.afterDays is not before graceDays: the fee would arrive after suspension')
         end
     end
-    for _, p in ipairs(Config.promotions or {}) do
-        if not p.id then print('[as-carrier] config: a promotion has no id')
-        elseif p.plans then
-            for _, pid in ipairs(p.plans) do
-                if not PLANS[pid] then print(('[as-carrier] config: promotion "%s" names an unknown plan "%s"'):format(p.id, pid)) end
+    local mode = billingCfg.outOfData
+    if mode ~= nil and mode ~= 'bill' and mode ~= 'throttle' and mode ~= 'block' then
+        add('error', 'billing.outOfData must be bill, throttle or block')
+    end
+    if (tonumber(billingCfg.throttleKBps) or 1) <= 0 then add('error', 'throttleKBps must be above 0') end
+    if (tonumber(billingCfg.dataHeartbeatSeconds) or 60) < 15 then add('warning', 'dataHeartbeatSeconds below 15 is treated as 15') end
+    local al = billingCfg.alerts or {}
+    if al.enabled == true then
+        local t = al.thresholds or {}
+        if #t < 1 or #t > 2 then add('warning', 'alerts.thresholds should hold one or two percentages')
+        else
+            for _, v in ipairs(t) do
+                if type(v) ~= 'number' or v <= 0 or v > 100 then add('error', 'alerts.thresholds must be numbers between 1 and 100') break end
             end
         end
     end
+
+    -- add-ons
+    local ids = {}
+    for _, a in ipairs((billingCfg.addons or {}).list or {}) do
+        if not a.id then add('error', 'an add-on has no id')
+        else
+            if ids[a.id] then add('error', 'add-on id "%s" is used twice', a.id) end
+            ids[a.id] = true
+            if (tonumber(a.price) or -1) < 0 then add('error', 'add-on "%s" needs a price', a.id) end
+            if (tonumber(a.dataMB) or 0) <= 0 and (tonumber(a.minutes) or 0) <= 0 and (tonumber(a.texts) or 0) <= 0 then
+                add('error', 'add-on "%s" adds nothing: give it dataMB, minutes or texts', a.id)
+            end
+            if a.label == nil then add('warning', 'add-on "%s" has no label', a.id) end
+        end
+    end
+
+    -- prepaid
+    local top = (Config.prepaid or {}).topUp or {}
+    local tmin, tmax = tonumber(top.min) or 1, tonumber(top.max) or 1000
+    if tmin <= 0 or tmax < tmin then add('error', 'prepaid.topUp: min must be above 0 and max at least min') end
+    for _, v in ipairs(top.presets or {}) do
+        if type(v) ~= 'number' or v < tmin or v > tmax then add('warning', 'prepaid.topUp.presets has %s, outside min and max', tostring(v)) end
+    end
+    local atu = (Config.prepaid or {}).autoTopUp or {}
+    if atu.enabled == true then
+        for _, v in ipairs(atu.amounts or {}) do
+            if type(v) ~= 'number' or v < tmin or v > tmax then add('warning', 'prepaid.autoTopUp.amounts has %s, outside the top-up min and max', tostring(v)) end
+        end
+        if #(atu.amounts or {}) == 0 then add('warning', 'prepaid.autoTopUp.amounts is empty, players have nothing to choose') end
+    end
+
+    -- contract, pause
+    local ct = Config.contract or {}
+    if (tonumber(ct.feeRate) or 0.5) < 0 then add('error', 'contract.feeRate must not be negative') end
+    if (tonumber(ct.maxFee) or 0) > 0 and (tonumber(ct.minFee) or 0) > (tonumber(ct.maxFee) or 0) then add('error', 'contract.minFee is above maxFee') end
+    local pz = Config.pause or {}
+    if pz.enabled == true and (tonumber(pz.maxDays) or 28) < 1 then add('error', 'pause.maxDays must be at least 1') end
+
+    -- promotions
+    local pids = {}
+    for _, p in ipairs(Config.promotions or {}) do
+        if not p.id then add('error', 'a promotion has no id')
+        else
+            if pids[p.id] then add('error', 'promotion id "%s" is used twice', p.id) end
+            pids[p.id] = true
+            if p.kind ~= nil and p.kind ~= 'percent' and p.kind ~= 'amount' and p.kind ~= 'free' then
+                add('error', 'promotion "%s": kind must be percent, amount or free', p.id)
+            end
+            local kind = p.kind or 'percent'
+            if kind ~= 'free' and (tonumber(p.value) or 0) <= 0 then add('error', 'promotion "%s" needs a value above 0', p.id) end
+            if kind == 'percent' and (tonumber(p.value) or 0) > 100 then add('error', 'promotion "%s": percent is above 100', p.id) end
+            for _, f in ipairs({ 'startsAt', 'endsAt' }) do
+                if p[f] ~= nil and parseTime(p[f]) == nil then add('error', 'promotion "%s": %s is not a date (YYYY-MM-DD)', p.id, f) end
+            end
+            local sa, ea = parseTime(p.startsAt), parseTime(p.endsAt)
+            if sa and ea and ea < sa then add('error', 'promotion "%s" ends before it starts', p.id) end
+            if p.plans then
+                for _, pid in ipairs(p.plans) do
+                    if not PLANS[pid] then add('error', 'promotion "%s" names an unknown plan "%s"', p.id, pid) end
+                end
+            end
+            if p.code ~= nil and tostring(p.code):match('^%s*$') then add('error', 'promotion "%s" has an empty code', p.id) end
+        end
+    end
+
+    -- payment, admin, receipts, locale
+    if type(PAY_ACCOUNT) ~= 'string' or not PAY_ACCOUNT:match('^[%w_]+$') then add('error', 'payment.account must be a plain name like "bank"') end
+    if (tonumber(paymentCfg.autoPayRetrySeconds) or 3600) < 60 then add('warning', 'autoPayRetrySeconds below 60 is treated as 60') end
+    local rc = Config.receipts or {}
+    if rc.delivery == 'custom' and type(rc.send) ~= 'function' then add('error', 'receipts.delivery is "custom" but receipts.send is not a function') end
+    if rc.delivery ~= nil and rc.delivery ~= 'notification' and rc.delivery ~= 'custom' then add('error', 'receipts.delivery must be notification or custom') end
+    local wh = (Config.admin or {}).webhook or {}
+    if type(wh.url) == 'string' and wh.url ~= '' and not wh.url:match('^https://') then add('warning', 'admin.webhook.url should start with https://') end
+    if wh.url and wh.url ~= '' and (tonumber(wh.everyHours) or 24) <= 0 then add('error', 'admin.webhook.everyHours must be above 0') end
+    local code = Config.locale or 'en'
+    if code ~= 'en' and not (Locales and Locales[code]) then add('warning', 'Config.locale "%s" has no file in locales/, English is used', code) end
+    if Config.accountBy ~= nil and Config.accountBy ~= 'auto' and Config.accountBy ~= 'sim' and Config.accountBy ~= 'character' then
+        add('error', 'accountBy must be auto, sim or character')
+    end
+    return out
+end
+
+--- Prints the config problems to the console. Returns the number of errors and warnings.
+function core.validateConfig()
+    local errors, warnings = 0, 0
+    for _, i in ipairs(core.checkConfig()) do
+        print(('[as-carrier] config %s: %s'):format(i.level, i.text))
+        if i.level == 'error' then errors = errors + 1 else warnings = warnings + 1 end
+    end
+    return errors, warnings
 end
 
 -- Promotions ----------------------------------------------------------------------------------
 
-local function parseTime(v)
+function parseTime(v)
     if type(v) == 'number' then return v end
     if type(v) == 'string' then
         local y, m, d, H, M = v:match('^(%d+)-(%d+)-(%d+)[ T]?(%d*):?(%d*)$')
@@ -203,6 +334,9 @@ end
 local USED = { minutes = 'minutes_used', texts = 'texts_used', data = 'data_mb_used' }
 local RATE = { minutes = 'overagePerMinute', texts = 'overagePerText', data = 'overagePerMB' }
 local WHATS = { 'minutes', 'texts', 'data' }
+-- the add-on amount held for each kind, and the add-on field that carries it
+local EXTRA = { minutes = 'extra_minutes', texts = 'extra_texts', data = 'extra_data_mb' }
+local ADDON_FIELD = { minutes = 'minutes', texts = 'texts', data = 'dataMB' }
 
 local function includedOf(plan, row, what)
     local base
@@ -211,8 +345,7 @@ local function includedOf(plan, row, what)
     else base = tonumber(plan.dataMB) end
     if base == nil then base = -1 end
     if base < 0 then return -1 end
-    if what == 'data' then base = base + (row.extra_data_mb or 0) end
-    return base
+    return base + (row[EXTRA[what]] or 0)
 end
 
 local function remainingOf(plan, row, what)
@@ -292,6 +425,8 @@ function core.loadGate()
         r.texts_used = tonumber(r.texts_used) or 0
         r.data_mb_used = tonumber(r.data_mb_used) or 0
         r.extra_data_mb = tonumber(r.extra_data_mb) or 0
+        r.extra_minutes = tonumber(r.extra_minutes) or 0
+        r.extra_texts = tonumber(r.extra_texts) or 0
         r.due_at = tonumber(r.due_at) or 0
         r.paused_at = tonumber(r.paused_at)
         setKnown(r.citizenid, r)
@@ -310,7 +445,7 @@ local cache, touched, dirty, dailyBuf, loading, locks = {}, {}, {}, {}, {}, {}
 local EVICT_AFTER = 600
 
 local NUMBERS = { 'cycle_start', 'due_at', 'minutes_used', 'texts_used', 'data_mb_used', 'balance_due', 'credit',
-    'extra_data_mb', 'promo_cycles_left', 'alert_bits' }
+    'extra_data_mb', 'extra_minutes', 'extra_texts', 'auto_topup_amount', 'auto_topup_below', 'promo_cycles_left', 'alert_bits' }
 local NULLABLE_NUMBERS = { 'balance_since', 'contract_ends', 'paused_at', 'paused_until' }
 
 local function normalize(row)
@@ -597,6 +732,9 @@ local function addDaily(key, what, units)
     else e.d = e.d + units end
 end
 
+local autoTopUp   -- defined with the other money functions below
+local topQueued = {}
+
 --- Counts usage on an account: what = 'minutes' | 'texts' | 'data'. Prepaid accounts pay for what goes past
 --- their allowance out of credit; data past the cap follows Config.billing.outOfData.
 function core.record(key, what, units)
@@ -633,6 +771,20 @@ function core.record(key, what, units)
     addDaily(key, what, units)
     if isPrepaidKind(kind) then setKnown(key, row) end
     checkAlerts(key, row, plan, kind)
+
+    -- auto top-up runs on its own thread: the account may be locked right now, and the bank can be slow
+    if isPrepaidKind(kind) and (row.auto_topup_amount or 0) > 0 and row.credit <= (row.auto_topup_below or 0)
+        and not topQueued[key] then
+        topQueued[key] = true
+        CreateThread(function()
+            local ok, err = pcall(core.withLock, key, function()
+                local r = core.getRow(key)
+                if r then autoTopUp(key, r, nil, nil) end
+            end)
+            topQueued[key] = nil
+            if not ok then print(('[as-carrier] auto top-up failed for %s: %s'):format(key, tostring(err))) end
+        end)
+    end
 end
 
 --- 'ok' | 'throttled' | 'blocked', plus the reason when blocked.
@@ -747,6 +899,55 @@ function core.autoPay(key, row, source, force)
     return false
 end
 
+local lastTopTry, topFailed = {}, {}
+
+--- Tops credit up from the bank when the player's auto top-up is on and credit has dropped to their level (or
+--- is short of `needCredit`, a bundle renewal). Failed tries wait Config.prepaid.autoTopUp.retrySeconds and
+--- the player is told once. Returns true if credit was added.
+function core.autoTopUp(key, row, source, needCredit)
+    local cfg = (Config.prepaid or {}).autoTopUp or {}
+    local amount = money(row.auto_topup_amount)
+    if cfg.enabled ~= true or amount <= 0 then return false end
+    local below = money(row.auto_topup_below)
+    if not (row.credit <= below or (needCredit and row.credit < needCredit)) then return false end
+    local now = os.time()
+    local retry = math.max(30, tonumber(cfg.retrySeconds) or 600)
+    if lastTopTry[key] and now - lastTopTry[key] < retry then return false end
+
+    if not core.charge(key, row, source, amount) then
+        lastTopTry[key] = now   -- only a failure makes it wait
+        if not topFailed[key] then
+            topFailed[key] = true
+            notifyKey(key, T('notify.autoTopUpFailedTitle'), T('notify.autoTopUpFailedBody', priceText(amount)))
+        end
+        return false
+    end
+    topFailed[key], lastTopTry[key] = nil, nil
+    core.save(key, {
+        credit = money(row.credit + amount),
+        alert_bits = clearBit(clearBit(row.alert_bits, BIT_LOW_CREDIT), BIT_NO_CREDIT),
+    })
+    record(key, { kind = 'topup', planId = row.plan_id, amount = amount, cycleStart = now, label = T('ui.autoTopUpLabel'),
+        items = { { k = 'topup', label = T('ui.autoTopUpLabel'), amount = amount } }, paid = true, paidAt = now, at = now })
+    setKnown(key, row)
+    notifyKey(key, T('notify.autoTopUpTitle'), T('notify.autoTopUpBody', priceText(amount), priceText(row.credit)))
+    pushUpdate(key)
+    return true
+end
+autoTopUp = core.autoTopUp
+
+--- Gives money back to whoever pays this account (the payer online, else offline in the database).
+local function refundBank(row, amount)
+    amount = money(amount)
+    if amount <= 0 then return true end
+    local src = payerSource(row)
+    if src then return Bridge.addMoney(src, PAY_ACCOUNT, amount) == true end
+    if paymentCfg.offlineAutoPay ~= false and row.payer_id then
+        return Bridge.addMoneyOffline(row.payer_id, PAY_ACCOUNT, amount) == true
+    end
+    return false
+end
+
 --- Skip an account in the sweep until this time (nothing to do but wait for an auto-pay retry).
 local skipUntil = {}
 function core.sweepSkip(key, now) return skipUntil[key] and now < skipUntil[key] end
@@ -826,7 +1027,7 @@ function core.startPlan(key, row, planId, now, opts)
             f.alert_bits = clearBit(clearBit(clearBit(f.alert_bits or row.alert_bits, BIT_LOW_CREDIT), BIT_NO_CREDIT), BIT_BUNDLE_ENDED)
             result.purchased = true
             record(key, { kind = 'bundle', planId = planId, amount = charge, cycleStart = now, label = plan.label,
-                items = items, paid = true, paidAt = now, at = now })
+                items = items, paid = true, paidAt = now, at = now, pay = 'credit' })
         else
             -- not paid for: the bundle is over before it began
             f.due_at = now
@@ -910,12 +1111,16 @@ function core.rollCycle(key, row, source, now)
         cycle_start = now, due_at = now + CYCLE_SECONDS, minutes_used = 0, texts_used = 0, data_mb_used = 0,
         pending_plan = NULL, alert_bits = clearMask(row.alert_bits, USAGE_MASK),
     }
-    -- add-on MB: gone at the end of the cycle unless carry-over is on
-    local keep = 0
-    if (billingCfg.addons or {}).carryOver == true and row.extra_data_mb > 0 then
-        keep = math.min(row.extra_data_mb, math.max(0, includedOf(plan, row, 'data') - row.data_mb_used))
+    -- add-ons: gone at the end of the cycle unless carry-over is on
+    local carryOver = (billingCfg.addons or {}).carryOver == true
+    for _, what in ipairs(WHATS) do
+        local col = EXTRA[what]
+        local keep = 0
+        if carryOver and (row[col] or 0) > 0 then
+            keep = math.min(row[col], math.max(0, includedOf(plan, row, what) - (row[USED[what]] or 0)))
+        end
+        f[col] = keep
     end
-    f.extra_data_mb = keep
 
     local charge, newBalance = 0, row.balance_due
     if kind == 'postpaid' then
@@ -974,6 +1179,7 @@ end
 function core.bundleEnded(key, row, source, now)
     local plan = planFor(row.plan_id)
     local price = tonumber(plan.price) or 0
+    if truthy(row.auto_pay) and row.credit < price then core.autoTopUp(key, row, source, price) end
     if truthy(row.auto_pay) and row.credit >= price then
         local _, started = core.startPlan(key, row, row.plan_id, now, {})
         if started and started.purchased then
@@ -1021,6 +1227,7 @@ function core.process(key, row, source)
         core.rollCycle(key, row, source, now)
     end
     core.autoPay(key, row, source, false)
+    if chosen and isPrepaidKind(kind) and (row.auto_topup_amount or 0) > 0 then core.autoTopUp(key, row, source, nil) end
 
     -- an unpaid, suspended account only needs the sweep again when auto-pay could retry
     if row.balance_due > 0 and row.status == 'suspended' then
@@ -1266,6 +1473,19 @@ local function addonById(id)
     return nil
 end
 
+-- What an add-on would add on this plan: { minutes = n, texts = n, data = n } for each kind the plan is not
+-- already unlimited in. Empty means the add-on is no use here.
+local function addonGains(plan, row, addon)
+    local gains = {}
+    for _, what in ipairs(WHATS) do
+        local amount = tonumber(addon[ADDON_FIELD[what]]) or 0
+        if amount > 0 and includedOf(plan, row, what) >= 0 then gains[what] = amount end
+    end
+    return gains
+end
+
+local ADDON_CAP = { minutes = 'maxExtraMinutes', texts = 'maxExtraTexts', data = 'maxExtraMB' }
+
 function core.buyAddon(key, row, source, id)
     local addon = addonById(id)
     if not addon then return nil, T('err.unknownAddon') end
@@ -1274,31 +1494,253 @@ function core.buyAddon(key, row, source, id)
     if row.paused_at then return nil, T('err.paused') end
     local plan = planFor(row.plan_id)
     local kind = kindOf(plan)
-    if kind ~= 'payg' and (tonumber(plan.dataMB) or -1) < 0 then return nil, T('err.addonNotNeeded') end
-    if kind == 'bundle' and row.status == 'expired' then return nil, T('err.expired') end
-    local cap = tonumber((billingCfg.addons or {}).maxExtraMB) or 0
-    local mb = tonumber(addon.dataMB) or 0
-    if cap > 0 and row.extra_data_mb + mb > cap then return nil, T('err.addonCap') end
+    if kind == 'bundle' and (row.status == 'expired' or os.time() >= row.due_at) then return nil, T('err.expired') end
+    local gains = addonGains(plan, row, addon)
+    if not next(gains) then return nil, T('err.addonNotNeeded') end
+    for what, amount in pairs(gains) do
+        local cap = tonumber((billingCfg.addons or {})[ADDON_CAP[what]]) or 0
+        if cap > 0 and (row[EXTRA[what]] or 0) + amount > cap then return nil, T('err.addonCap') end
+    end
     local price = money(addon.price)
 
     local now = os.time()
-    local fields = { extra_data_mb = row.extra_data_mb + mb }
+    local fields, mask = {}, 0
+    for what, amount in pairs(gains) do
+        fields[EXTRA[what]] = (row[EXTRA[what]] or 0) + amount
+        mask = mask | (1 << BIT[what][1]) | (1 << BIT[what][2])   -- the alerts start over with the bigger allowance
+    end
+    local pay = 'bank'
     if isPrepaidKind(kind) then
         if row.credit < price then
             return nil, T('err.needCredit', priceText(money(price - row.credit))), { needCredit = money(price - row.credit) }
         end
         fields.credit = money(row.credit - price)
+        pay = 'credit'
     else
         if not core.charge(key, row, source, price) then return nil, T('err.insufficientFunds') end
     end
-    -- the data alerts start over with the bigger allowance
-    fields.alert_bits = clearMask(row.alert_bits, (1 << BIT.data[1]) | (1 << BIT.data[2]))
+    fields.alert_bits = clearMask(row.alert_bits, mask)
     core.save(key, fields)
     record(key, { kind = 'addon', planId = row.plan_id, amount = price, cycleStart = now, label = addon.label,
-        items = { { k = 'addon', label = addon.label, amount = price } }, paid = true, paidAt = now, at = now })
+        items = { { k = 'addon', label = addon.label, amount = price } }, paid = true, paidAt = now, at = now, pay = pay })
     setKnown(key, row)
     pushUpdate(key)
     return true
+end
+
+--- Switches a player's auto top-up on (amount > 0) or off (amount 0). `below` is the credit level that triggers it.
+function core.setAutoTopUp(key, row, source, amount, below)
+    local cfg = (Config.prepaid or {}).autoTopUp or {}
+    if cfg.enabled ~= true then return nil, T('err.autoTopUpOff') end
+    amount, below = money(amount), money(below)
+    if amount <= 0 then
+        core.save(key, { auto_topup_amount = 0, auto_topup_below = 0 })
+        topFailed[key] = nil
+        return true
+    end
+    if truthy(row.plan_chosen) and not isPrepaidKind(kindOf(planFor(row.plan_id))) then return nil, T('err.topUpNotPrepaid') end
+    local t = (Config.prepaid or {}).topUp or {}
+    local min, max = tonumber(t.min) or 1, tonumber(t.max) or 1000
+    if amount < min or amount > max then return nil, T('err.topUpRange', priceText(min), priceText(max)) end
+    if below < 0 or below > max then below = 0 end
+    core.save(key, { auto_topup_amount = amount, auto_topup_below = below })
+    lastTopTry[key], topFailed[key] = nil, nil
+    core.autoTopUp(key, row, source, nil)   -- already at or under the level? top up now
+    return true
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Refunds and bulk promotions (staff)
+-- ---------------------------------------------------------------------------------------------
+
+--- Refunds a bill, fee, add-on or top-up. A bill or fee that is still unpaid is waived instead (nothing is
+--- paid back). Paid money goes back to the payer's bank, or to credit for something that was bought with credit
+--- (or when mode = 'credit'). Returns true, and a message saying what was done.
+function core.refund(key, row, entryId, mode)
+    local e = store.getHistoryEntry(key, entryId)
+    if not e then return nil, T('err.noSuchEntry') end
+    if truthy(e.refunded) then return nil, T('err.alreadyRefunded') end
+    local kind = e.kind or 'bill'
+    if kind ~= 'bill' and kind ~= 'fee' and kind ~= 'addon' and kind ~= 'topup' then return nil, T('err.cannotRefund') end
+    local amount = money(e.amount)
+    local now = os.time()
+
+    if not truthy(e.paid) then
+        if kind ~= 'bill' and kind ~= 'fee' then return nil, T('err.cannotRefund') end
+        if not store.markRefunded(key, entryId, now) then return nil, T('err.alreadyRefunded') end
+        local left = math.max(0, money(row.balance_due - amount))
+        if left <= 0 then core.settle(key, row, now) else core.save(key, { balance_due = left }) end
+        pushUpdate(key)
+        return true, ('waived %s'):format(priceText(amount))
+    end
+
+    local toCredit = (mode == 'credit' or e.pay == 'credit') and kind ~= 'topup'
+    local took = false
+    if kind == 'topup' then
+        if row.credit < amount then return nil, T('err.creditSpent') end
+        core.save(key, { credit = money(row.credit - amount) })
+        took = true
+    end
+    if toCredit then
+        core.save(key, { credit = money(row.credit + amount) })
+    elseif not refundBank(row, amount) then
+        if took then core.save(key, { credit = money(row.credit + amount) }) end
+        return nil, T('err.refundBank')
+    end
+    if not store.markRefunded(key, entryId, now) then
+        -- someone else refunded it between the check and now: undo
+        if toCredit then core.save(key, { credit = money(row.credit - amount) }) end
+        return nil, T('err.alreadyRefunded')
+    end
+    record(key, { kind = 'refund', planId = row.plan_id, amount = amount, cycleStart = now, label = T('ui.refundLabel'),
+        items = { { k = 'refund', label = e.label ~= '' and e.label or kind, amount = amount } }, paid = true, paidAt = now,
+        at = now, pay = toCredit and 'credit' or 'bank' })
+    setKnown(key, row)
+    pushUpdate(key)
+    return true, ('refunded %s to %s'):format(priceText(amount), toCredit and 'credit' or 'the bank')
+end
+
+--- Writes everything waiting and forgets every account that is not mid-request, so the next read comes from the
+--- database (after a bulk change).
+function core.evictAll()
+    local keys = {}
+    for k in pairs(cache) do keys[#keys + 1] = k end
+    for _, k in ipairs(keys) do
+        if not locks[k] and not loading[k] then
+            local ok = pcall(core.flushKey, k)
+            if ok and not dirty[k] and not dailyBuf[k] then cache[k], touched[k] = nil, nil end
+        end
+    end
+end
+
+--- Gives every account on a matching plan a configured promotion it has not used. scope: all | postpaid | prepaid.
+--- Returns the number of accounts, or nil + message.
+function core.bulkPromo(promoId, scope)
+    local promo = PROMOS[promoId]
+    if not promo then return nil, T('err.unknownPromo') end
+    scope = (scope == 'postpaid' or scope == 'prepaid') and scope or 'all'
+    local postpaid, prepaid = {}, {}
+    for _, p in ipairs(PLAN_LIST) do
+        if (tonumber(p.price) or 0) > 0 or kindOf(p) == 'payg' then
+            local list = isPrepaidKind(kindOf(p)) and prepaid or postpaid
+            list[#list + 1] = p.id
+        end
+    end
+    core.evictAll()
+    return store.bulkPromo(promo.id, promo.cycles, scope, postpaid, prepaid)
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Receipts and the staff dashboard
+-- ---------------------------------------------------------------------------------------------
+
+local function signedPrice(n)
+    n = tonumber(n) or 0
+    if n < 0 and money(n) ~= 0 then return '-' .. priceText(-n) end
+    return priceText(math.abs(n))
+end
+
+local function mbLabel(mb)
+    if mb >= 1000 then return T('ui.gb', math.floor(mb / 100 + 0.5) / 10) end
+    return T('ui.mb', math.floor(mb + 0.5))
+end
+
+local function itemLabel(it)
+    if it.k == 'plan' then return T('ui.planLine', it.label or '') end
+    if it.k == 'minutes' then return T('ui.itemMinutes', math.floor((it.qty or 0) + 0.5)) end
+    if it.k == 'texts' then return T('ui.itemTexts', math.floor((it.qty or 0) + 0.5)) end
+    if it.k == 'data' then return T('ui.itemData', mbLabel(it.qty or 0)) end
+    if it.k == 'topup' then return T('ui.topUpLabel') end
+    return it.label or ''
+end
+
+local function padLine(a, b, w)
+    local gap = math.max(1, w - #a - #b)
+    return a .. string.rep(' ', gap) .. b
+end
+
+--- The plain-text receipt for a history entry.
+function core.receiptText(e, row)
+    local W = 34
+    local rule = string.rep('-', W)
+    local at = e.at or tonumber(e.cycle_start) or os.time()
+    local lines = { (Config.app.name or 'Aero Mobile'):upper(), T('ui.receipt') .. ' #' .. tostring(e.id):upper(),
+        T('ui.date') .. ': ' .. os.date('%d %b %Y', at), rule }
+    local plan = PLANS[e.plan_id]
+    if (e.kind or 'bill') == 'bill' then
+        local from = tonumber(e.cycle_start) or at
+        lines[#lines + 1] = T('ui.period') .. ': ' .. os.date('%d %b', from) .. ' - ' .. os.date('%d %b', from + CYCLE_SECONDS - 1)
+        lines[#lines + 1] = T('ui.planWord') .. ': ' .. ((plan and plan.label) or e.label or e.plan_id or '')
+    else
+        lines[#lines + 1] = (e.label and e.label ~= '') and e.label or (plan and plan.label) or ''
+    end
+    lines[#lines + 1] = rule
+    local items = e.items
+    if not items or #items == 0 then items = { { k = 'x', label = e.label or '', amount = e.amount } } end
+    for _, it in ipairs(items) do lines[#lines + 1] = padLine(itemLabel(it), signedPrice(it.amount), W) end
+    lines[#lines + 1] = rule
+    lines[#lines + 1] = padLine(T('ui.total'), signedPrice(e.amount), W)
+    lines[#lines + 1] = ''
+    lines[#lines + 1] = truthy(e.paid) and (T('ui.paid') .. (e.paid_at and (' ' .. os.date('%d %b', e.paid_at)) or '')) or T('ui.unpaid')
+    return table.concat(lines, '\n')
+end
+
+--- Sends a receipt to the player's phone: through Config.receipts.send when delivery is 'custom', else as a
+--- banner. Returns true, and how it was delivered.
+function core.sendReceipt(key, row, source, id)
+    local e = store.getHistoryEntry(key, id)
+    if not e then return nil, T('err.noSuchEntry') end
+    local text = core.receiptText(e, row)
+    local subject = T('ui.receipt') .. ' #' .. tostring(e.id):upper()
+    local rc = Config.receipts or {}
+    if rc.delivery == 'custom' and type(rc.send) == 'function' then
+        local ok, res = pcall(rc.send, source, subject, text, e)
+        if ok and res == true then return true, 'custom' end
+        if not ok then print(('[as-carrier] receipts.send failed: %s'):format(tostring(res))) end
+    end
+    local label = (e.label and e.label ~= '') and e.label or subject
+    TriggerClientEvent('sd-phone:client:notify', source, {
+        app = 'carrier', appId = Config.app.identifier, title = subject,
+        body = ('%s: %s'):format(label, signedPrice(e.amount)), time = 'now',
+    })
+    return true, 'notification'
+end
+
+--- The numbers for /carrier stats, /carrier dash and the Discord summary.
+function core.dashboard()
+    local now = os.time()
+    local kinds = {}
+    for id, p in pairs(PLANS) do kinds[id] = kindOf(p) end
+    local d = store.stats(now, kinds)
+    d.at = now
+    d.plans = {}
+    for _, p in ipairs(PLAN_LIST) do
+        if (d.byPlan[p.id] or 0) > 0 then d.plans[#d.plans + 1] = { label = p.label or p.id, count = d.byPlan[p.id] } end
+    end
+    return d
+end
+
+--- The dashboard as plain lines.
+function core.dashboardLines(d)
+    local r = d.revenue
+    local lines = {
+        ('Accounts: %d monthly, %d pay-as-you-go, %d bundle, %d with no plan'):format(d.accounts.postpaid, d.accounts.payg, d.accounts.bundle, d.accounts.none),
+        ('Money in: %s today, %s in 7 days, %s in 30 days'):format(signedPrice(r.day), signedPrice(r.week), signedPrice(r.month)),
+        ('Overdue: %d account(s) owe %s (%d suspended)'):format(d.overdue, priceText(d.owed), d.suspended),
+        ('Paused: %d. Credit held by prepaid players: %s'):format(d.paused, priceText(d.credit)),
+        ('Active in the last 7 days: %d'):format(d.activeWeek),
+    }
+    if #d.plans > 0 then
+        local parts = {}
+        for _, p in ipairs(d.plans) do parts[#parts + 1] = ('%s %d'):format(p.label, p.count) end
+        lines[#lines + 1] = 'Plans: ' .. table.concat(parts, ', ')
+    end
+    if #d.topData > 0 then
+        local parts = {}
+        for _, t in ipairs(d.topData) do parts[#parts + 1] = ('%s %s'):format(t.key, mbLabel(t.mb)) end
+        lines[#lines + 1] = 'Top data (7 days): ' .. table.concat(parts, ', ')
+    end
+    return lines
 end
 
 function core.payBill(key, row, source)
@@ -1353,6 +1795,7 @@ function core.statusFor(key, row)
         history[i] = {
             id = h.id, kind = h.kind or 'bill', planId = h.plan_id, label = h.label, amount = tonumber(h.amount) or 0,
             paid = truthy(h.paid), paidAt = h.paid_at, cycleStart = tonumber(h.cycle_start), at = h.at, items = h.items,
+            pay = h.pay or 'bank', refunded = truthy(h.refunded),
         }
     end
 
@@ -1365,8 +1808,11 @@ function core.statusFor(key, row)
 
     local addons = {}
     for _, a in ipairs((billingCfg.addons or {}).list or {}) do
-        addons[#addons + 1] = { id = a.id, label = a.label, dataMB = a.dataMB, price = a.price }
+        if not chosen or next(addonGains(plan, row, a)) then
+            addons[#addons + 1] = { id = a.id, label = a.label, dataMB = a.dataMB, minutes = a.minutes, texts = a.texts, price = a.price }
+        end
     end
+    local atu = (Config.prepaid or {}).autoTopUp or {}
 
     local promo = row.promo_id and PROMOS[row.promo_id]
     local estimate, estimateItems = 0, nil
@@ -1402,7 +1848,7 @@ function core.statusFor(key, row)
         cycleStart = row.cycle_start, dueAt = row.due_at,
         cycleDays = math.floor(CYCLE_SECONDS / DAY),
         minutesUsed = row.minutes_used, textsUsed = row.texts_used, dataMBUsed = row.data_mb_used,
-        extraDataMB = row.extra_data_mb,
+        extraDataMB = row.extra_data_mb, extraMinutes = row.extra_minutes, extraTexts = row.extra_texts,
         estimatedThisCycle = estimate, estimateItems = estimateItems,
         balanceDue = row.balance_due,
         payBy = (row.balance_due > 0 and row.balance_since) and (row.balance_since + GRACE_SECONDS) or nil,
@@ -1413,6 +1859,8 @@ function core.statusFor(key, row)
         topUp = { min = tonumber(topUp.min) or 1, max = tonumber(topUp.max) or 1000, presets = topUp.presets or {},
             available = not chosen or prepaid },
         addons = addons,
+        autoTopUp = { enabled = atu.enabled == true, amount = row.auto_topup_amount, below = row.auto_topup_below,
+            amounts = atu.amounts or {}, belowOptions = atu.below or {} },
         contract = chosen and kind == 'postpaid' and {
             cycles = tonumber(plan.contractCycles) or 0, endsAt = row.contract_ends, cyclesLeft = contractLeft,
             exitFee = core.exitFee(row, now), upgradesFree = (Config.contract or {}).upgradesFree ~= false,
@@ -1433,7 +1881,8 @@ core._ = {
     hasBit = hasBit, setBit = setBit, clearBit = clearBit, clearMask = clearMask, USAGE_MASK = USAGE_MASK,
     includedOf = includedOf, remainingOf = remainingOf, discountOf = discountOf, buildGate = buildGate,
     cache = cache, dirty = dirty, setKnown = setKnown, setStatus = setStatus, escalate = escalate,
-    record = record, normalize = normalize, hasUsed = hasUsed, addUsed = addUsed,
+    record = record, normalize = normalize, hasUsed = hasUsed, addUsed = addUsed, EXTRA = EXTRA, WHATS = WHATS,
+    addonGains = addonGains,
 }
 
 return core

@@ -58,15 +58,31 @@ in the config; delete or edit them freely.
 Per server, or per plan with `outOfData = '...'` on the plan:
 
 - `'bill'` (default): data keeps working and the extra MB are billed (monthly) or taken from credit (prepaid).
-- `'throttle'`: data keeps working at reduced speed and nothing extra is billed, so there are no surprise bills.
-  sd-phone is told through `getDataState` / the download hook (see "Exports"); the app shows a banner.
+- `'throttle'`: data keeps working at reduced speed (`throttleKBps`) and nothing extra is billed, so there are no
+  surprise bills. The app shows a banner. sd-phone's app store can really slow downloads with a one-line edit (see
+  "sd-phone edits"); `getDataState` tells other scripts.
 - `'block'`: data stops until the next cycle (or until an add-on is bought). Nothing extra is billed.
 
-### Data add-ons (`Config.billing.addons`)
+### How mobile data is metered
 
-Players buy extra MB for the current cycle ("Add data" on the Overview and Plans tabs). Monthly players pay from
-the bank straight away, prepaid players from credit. Unused add-on MB expire at the end of the cycle unless
-`carryOver = true`. Unlimited-data plans don't offer them.
+Same rule as sd-phone's own meter: a ping every `dataHeartbeatSeconds` while the **phone is open and not on Wi-Fi**
+(Wi-Fi is free) and cell data is available, adding `dataPerHeartbeatMB`. It is sent by a script in this resource,
+so it runs whether or not the Aero Mobile app is open. Wi-Fi and the open phone exist only on the client, so the
+server cannot measure them itself; what it does check is that the phone is not known to be closed (from sd-phone's
+open / close reports) and that pings do not arrive faster than the interval. Past the cap the usual
+`outOfData` rules apply.
+
+> sd-phone ships its own Carrier / billing app and data ping (`client/billing.lua`, `configs/billing.lua`). If that is
+> still switched on, a phone is metered by both. Turn sd-phone's own billing off so only Aero Mobile counts. (Its
+> server code was not available to check this; look at your sd-phone setup.)
+
+### Add-ons (`Config.billing.addons`)
+
+Players buy extra **data, minutes or texts** for the current cycle ("Add extras" on the Overview and Plans tabs).
+An add-on can carry any of `dataMB`, `minutes`, `texts` (five examples ship: 1 / 3 / 10 GB, 100 minutes, 100 texts).
+Monthly players pay from the bank straight away, prepaid players from credit. An add-on is hidden where the plan is
+already unlimited in that kind. Unused amounts expire at the end of the cycle unless `carryOver = true`, and
+`maxExtraMB` / `maxExtraMinutes` / `maxExtraTexts` cap how much an account can hold.
 
 ### Prepaid credit (`Config.prepaid`)
 
@@ -74,6 +90,14 @@ the bank straight away, prepaid players from credit. Unused add-on MB expire at 
 pay-as-you-go plans, bundle purchases and renewals, usage past a bundle, and add-ons for prepaid players. Warnings
 go out at `Config.billing.alerts.lowCredit` and at zero. Other scripts can add credit with the `addCredit` export
 (for a shop that sells top-up cards).
+
+#### Auto top-up (a player option)
+
+With `Config.prepaid.autoTopUp.enabled`, each prepaid player can switch on auto top-up in the app: they pick an
+amount and a level ("add £10 when my credit is £2 or less"). When credit drops to that level the amount is taken from
+the bank and added, and it also tops up first when a bundle with auto-renew is about to renew with too little credit.
+It works for offline payers the same way auto-pay does. A failed attempt tells the player once and is retried after
+`retrySeconds`. Off by default for every player.
 
 ### Contracts (`contractCycles` on a plan, `Config.contract`)
 
@@ -122,8 +146,13 @@ prepaid.
 
 Overview (plan, allowances, credit, banners), Plans (change plan, add data, top up, pause, cancel), **Usage**
 (daily chart for data, minutes or texts, with today, daily average and busiest day) and Bills (every bill, fee,
-top-up, add-on and bundle). Tap an entry for its lines and **View receipt**: a receipt you can copy, or download as
-a text file (downloads depend on the NUI browser; Copy always works).
+top-up, add-on, refund and bundle). Tap an entry for its lines and **View receipt**: a receipt you can copy,
+download as a text file (downloads depend on the NUI browser; Copy always works) or **send to your phone**.
+
+`Config.receipts.delivery` decides what "send to my phone" does. `'notification'` (default) shows the receipt as a banner.
+`'custom'` calls your own `send(source, subject, body, entry)` function, so a receipt can go to any phone app, for example a
+mail app. The config has a commented example. sd-phone's server mail export was not available to check, so confirm its
+real arguments before using it.
 
 ### Billing offline players
 
@@ -146,17 +175,29 @@ written when a player leaves and when the resource stops. A crash can lose up to
 
 | Command | Does |
 | --- | --- |
-| `/carrier info <target>` | Plan, status, usage, balance, credit, contract, promotion |
+| `/carrier info <target>` | Plan, status, usage, balance, credit, add-ons, auto top-up, contract, promotion |
+| `/carrier history <target> [count]` | Recent bills, fees, top-ups, add-ons and refunds, with their ids |
+| `/carrier refund <target> <entryId> [credit]` | Pays a bill, fee, add-on or top-up back (to the payer's bank; to credit if it was bought with credit or you say `credit`). An unpaid bill or fee is waived instead. Never twice. A top-up can only be refunded while its credit is still there |
 | `/carrier setplan <target> <planId>` | Put them on a plan now (a bundle is free) |
 | `/carrier unplan <target>` | Back to "no plan" |
 | `/carrier credit <target> <amount>` | Add or remove (negative) prepaid credit |
-| `/carrier adddata <target> <mb>` | Add or remove add-on MB for this cycle |
+| `/carrier addextra <target> <data\|minutes\|texts> <amount>` | Add or remove add-on amounts for this cycle (`adddata <target> <mb>` still works) |
 | `/carrier clearbill <target>` | Waive what they owe |
 | `/carrier suspend <target>` / `restore <target>` | Cut service / lift it (restore re-starts the grace period if they still owe) |
 | `/carrier resetusage <target>` | Zero this cycle's usage |
-| `/carrier promo <target> <promoId>` | Give a promotion from the config |
+| `/carrier promo <target> <promoId>` | Give one account a promotion from the config |
+| `/carrier bulkpromo <promoId> [all\|postpaid\|prepaid]` | Give every matching account a promotion it has not used (works for a promotion with `enabled = false`, so you can keep a "sorry about the outage" one ready). Accounts already on a promotion keep it |
+| `/carrier stats` | Accounts, money in, overdue, credit held, active players, top data users. `/carrier stats send` posts it to Discord now |
+| `/carrier dash` | The same as an in-game menu (needs ox_lib) |
+| `/carrier validate` | Checks `config.lua` for mistakes (also printed at start) |
 
-Every change is logged to the server console and to the `sd_carrier_audit` table.
+Every change is logged to the server console and to the `sd_carrier_audit` table. "Money in" counts what players paid
+with bank money (bills, fees, top-ups, add-ons) minus refunds; spending credit on a bundle is not new money.
+
+### Discord summary
+
+Set `Config.admin.webhook.url` to post the same numbers to a Discord channel every `everyHours` (the timer starts when
+the server starts). Leave the url empty to switch it off.
 
 ## Upgrading
 
@@ -174,8 +215,11 @@ plan line and an "extras" line.
   players before you restart.
 - Behaviour change: with the default `outOfData = 'bill'`, downloads past the data cap are now allowed and billed
   as overage (before, they were refused while the same data was being billed). Use `'block'` for the old refusal.
-- The new texts are in `locales/en.lua`. The other language files don't have them yet, so those players see English
-  for the new screens until the files are translated (missing keys fall back to English).
+- All 13 language files are complete. Missing keys still fall back to English (see "Languages").
+- Behaviour change: mobile data is now counted while the phone is open and off Wi-Fi, whether or not the Aero Mobile app
+  is open (before, only a visible app sent pings, so almost nothing was counted). Expect much more data use; tune
+  `dataPerHeartbeatMB`, and make sure sd-phone's own billing is off (see "How mobile data is metered").
+- New columns (`extra_minutes`, `extra_texts`, `auto_topup_*` on accounts; `pay`, `refunded` on history) are added on start.
 
 ## sd-phone edits
 
@@ -225,8 +269,18 @@ end
 ```
 
 When `throttled` is true the player is past their data allowance on a `'throttle'` plan and `message` says so; the
-download still succeeds. If you want to slow it down, do that where the download progress is simulated (the speed is
-up to you, the carrier only reports the state).
+download still succeeds. `delayMs` is how long the download should take at `Config.billing.throttleKBps` (never more
+than `throttleMaxSeconds`). To really slow it down, add this right after the `if not dataResult.success then ... end`
+block above, so the install answer arrives that much later:
+
+```lua
+if dataResult.delayMs and dataResult.delayMs > 0 then
+    Wait(dataResult.delayMs)
+end
+```
+
+(Written against the README's snippet; sd-phone's server `actions.install` was not available to test it, so check
+how the app store shows a slow install.)
 
 ## Events and exports
 
@@ -237,6 +291,7 @@ Exports:
 - `tryConsumeDownloadData(source, sizeMB)`: the download hook (above).
 - `getDataState(source)`: `'ok'`, `'throttled'` or `'blocked'` for a player's mobile data.
 - `addCredit(key, amount)`: add (or remove, negative) prepaid credit; `getCredit(key)`.
+- The download hook also returns `delayMs` when throttled.
 
 ## Languages
 
@@ -244,7 +299,8 @@ Every text the script shows (phone notifications, errors and all of the app's sc
 `locales/en.lua`. Set `Config.locale` to switch. To add one, copy `locales/en.lua` to `locales/<code>.lua`
 (e.g. `de.lua`), translate the values only (keep the keys and the `%s` placeholders, in the same order),
 change `Locales['en']` to `Locales['<code>']` and set `Config.locale = '<code>'`. Any missing key falls back to
-English. Not in the locale files, because it is owner-editable text in `config.lua`: the app name and
+English. Every language file is complete; `lua tests/locale_check.lua` lists missing keys and any translation whose
+`%s` count differs from English (`--strict` fails on any missing key). Not in the locale files, because it is owner-editable text in `config.lua`: the app name and
 description (`Config.app`), the plan names (`Config.billing.plans[].label`), add-on and promotion labels. The month
 names used in dates are one comma-separated key, `ui.months`.
 
@@ -261,16 +317,22 @@ names used in dates are one comma-separated key, `ui.months`.
 - `server/core.lua`: the engine: in-memory accounts with batched saving, the service gate, usage and alerts, billing,
   escalation, plan changes, contracts, pause, top-ups, add-ons, promotions.
 - `server/main.lua`: the app's callbacks, sd-phone events, the sweep and flush threads, exports.
-- `server/admin.lua`: the `/carrier` staff commands.
-- `client/main.lua`: registers the app with sd-phone and bridges its NUI page to the server callbacks.
+- `server/admin.lua`: the `/carrier` staff commands, the dashboard and the Discord summary.
+- `client/main.lua`: registers the app with sd-phone, bridges its NUI page to the server callbacks, sends the data meter's
+  pings and shows the staff dashboard menu.
 - `ui/index.html`: the whole app screen. One self-contained file, no build step, follows the phone's light / dark
   theme.
 - `tests/`: a test harness that runs the real server scripts against an in-memory store (plain Lua 5.4:
-  `lua tests/core_test.lua` from this folder). Not loaded by the game.
+  `lua tests/core_test.lua` from this folder) and a language file checker (`lua tests/locale_check.lua`). Not loaded by
+  the game.
 
 ## Known limits
 
-- Data use is an estimate from a heartbeat the app sends while it is open on mobile data. The server rate-limits it,
-  but a modified client can still stay silent.
+- Data use is an estimate from a ping the client sends while the phone is open and off Wi-Fi. The server rate-limits it
+  and ignores it while it knows the phone is closed, but Wi-Fi and the open phone are known only to the client, so a
+  modified client could still stay silent or claim Wi-Fi.
 - The receipt "Download" button depends on the game's NUI browser allowing file downloads; Copy always works.
-- Offline auto-pay edits the framework's own money columns directly, see "Billing offline players".
+- "Send to my phone" shows a banner unless you give it a `send` function (see "The app").
+- Slowing real downloads needs the one-line sd-phone edit, which was written without sd-phone's server code to test against.
+- Offline auto-pay and refunds edit the framework's own money columns directly, see "Billing offline players".
+- The Discord summary timer restarts with the server.

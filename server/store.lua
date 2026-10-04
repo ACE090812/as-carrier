@@ -48,6 +48,10 @@ local ACCOUNT_COLUMNS = {
     { 'late_fee_applied',  'TINYINT(1) NOT NULL DEFAULT 0' },
     { 'alert_bits',        'INT NOT NULL DEFAULT 0' },
     { 'payer_id',          'VARCHAR(64) NULL' },
+    { 'extra_minutes',     'INT NOT NULL DEFAULT 0' },
+    { 'extra_texts',       'INT NOT NULL DEFAULT 0' },
+    { 'auto_topup_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0' },
+    { 'auto_topup_below',  'DECIMAL(10,2) NOT NULL DEFAULT 0' },
 }
 
 local HISTORY_COLUMNS = {
@@ -55,6 +59,8 @@ local HISTORY_COLUMNS = {
     { 'label', "VARCHAR(64) NOT NULL DEFAULT ''" },
     { 'items', 'TEXT NULL' },
     { 'at',    'BIGINT NOT NULL DEFAULT 0' },
+    { 'pay',      "VARCHAR(8) NOT NULL DEFAULT 'bank'" },   -- 'bank' = money in, 'credit' = spent from prepaid credit
+    { 'refunded', 'TINYINT(1) NOT NULL DEFAULT 0' },
 }
 
 -- Columns store.save may write (anything else is ignored, so a field name can never reach the SQL).
@@ -63,7 +69,8 @@ local SAVEABLE = {
     auto_pay = true, status = true, minutes_used = true, texts_used = true, data_mb_used = true,
     balance_due = true, balance_since = true, credit = true, extra_data_mb = true, contract_ends = true,
     paused_at = true, paused_until = true, promo_id = true, promo_cycles_left = true, promos_used = true,
-    late_fee_applied = true, alert_bits = true, payer_id = true,
+    late_fee_applied = true, alert_bits = true, payer_id = true, extra_minutes = true, extra_texts = true,
+    auto_topup_amount = true, auto_topup_below = true,
 }
 
 --- Creates the tables and brings the columns up to date. Returns true when the plan columns were added on
@@ -128,6 +135,7 @@ function store.ensureSchema()
 
     local planColumnAdded = false
     local promosColumnAdded = false
+    local payColumnAdded = false
     for _, c in ipairs(ACCOUNT_COLUMNS) do
         if not columnExists('sd_carrier_accounts', c[1]) then
             MySQL.query.await(('ALTER TABLE sd_carrier_accounts ADD COLUMN %s %s'):format(c[1], c[2]))
@@ -138,6 +146,7 @@ function store.ensureSchema()
     for _, c in ipairs(HISTORY_COLUMNS) do
         if not columnExists('sd_carrier_history', c[1]) then
             MySQL.query.await(('ALTER TABLE sd_carrier_history ADD COLUMN %s %s'):format(c[1], c[2]))
+            if c[1] == 'pay' then payColumnAdded = true end
         end
     end
 
@@ -160,6 +169,10 @@ function store.ensureSchema()
             WHERE plan_chosen = 1 OR citizenid IN (SELECT DISTINCT citizenid FROM sd_carrier_history)
         ]])
     end
+    if payColumnAdded then
+        -- bundles were always bought from credit
+        MySQL.update.await("UPDATE sd_carrier_history SET pay = 'credit' WHERE kind = 'bundle'")
+    end
     -- a brand new install has nothing to reset
     return planColumnAdded and (MySQL.scalar.await('SELECT COUNT(*) FROM sd_carrier_accounts') or 0) > 0
 end
@@ -172,8 +185,8 @@ end
 --- Just what the service gate needs for every account.
 function store.listGate()
     return MySQL.query.await([[
-        SELECT citizenid, plan_id, plan_chosen, status, paused_at, credit,
-               minutes_used, texts_used, data_mb_used, extra_data_mb
+        SELECT citizenid, plan_id, plan_chosen, status, paused_at, credit, due_at,
+               minutes_used, texts_used, data_mb_used, extra_data_mb, extra_minutes, extra_texts
         FROM sd_carrier_accounts
     ]]) or {}
 end
@@ -227,12 +240,12 @@ function store.insertHistory(cid, e)
     local id = e.id or newId(10)
     local at = e.at or os.time()
     MySQL.insert.await([[
-        INSERT INTO sd_carrier_history (id, citizenid, plan_id, amount, cycle_start, paid, paid_at, kind, label, items, at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO sd_carrier_history (id, citizenid, plan_id, amount, cycle_start, paid, paid_at, kind, label, items, at, pay)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]], {
         id, cid, e.planId or '', e.amount or 0, e.cycleStart or at,
         e.paid and 1 or 0, e.paid and (e.paidAt or at) or 0,
-        e.kind or 'bill', e.label or '', e.items and json.encode(e.items) or '', at,
+        e.kind or 'bill', e.label or '', e.items and json.encode(e.items) or '', at, e.pay == 'credit' and 'credit' or 'bank',
     })
     return id
 end
@@ -244,7 +257,7 @@ end
 
 function store.listHistory(cid, limit)
     local rows = MySQL.query.await([[
-        SELECT id, plan_id, amount, cycle_start, paid, paid_at, kind, label, items, at, UNIX_TIMESTAMP(created_at) AS created_ts
+        SELECT id, plan_id, amount, cycle_start, paid, paid_at, kind, label, items, at, pay, refunded, UNIX_TIMESTAMP(created_at) AS created_ts
         FROM sd_carrier_history WHERE citizenid = ? ORDER BY created_at DESC, at DESC LIMIT ?
     ]], { cid, limit or 12 }) or {}
     for _, r in ipairs(rows) do
@@ -283,6 +296,107 @@ end
 function store.audit(actor, target, action, detail)
     MySQL.insert.await('INSERT INTO sd_carrier_audit (id, actor, target, action, detail, at) VALUES (?, ?, ?, ?, ?, ?)',
         { newId(12), tostring(actor or ''), tostring(target or ''), tostring(action or ''), tostring(detail or ''):sub(1, 255), os.time() })
+end
+
+--- One history entry of an account (decoded like listHistory), or nil.
+function store.getHistoryEntry(cid, id)
+    if type(id) ~= 'string' or id == '' then return nil end
+    local r = MySQL.single.await([[
+        SELECT id, plan_id, amount, cycle_start, paid, paid_at, kind, label, items, at, pay, refunded
+        FROM sd_carrier_history WHERE citizenid = ? AND id = ?
+    ]], { cid, id })
+    if not r then return nil end
+    r.paid_at = tonumber(r.paid_at)
+    if r.paid_at == 0 then r.paid_at = nil end
+    r.at = tonumber(r.at)
+    if type(r.items) == 'string' and r.items ~= '' then
+        local ok, decoded = pcall(json.decode, r.items)
+        r.items = ok and decoded or nil
+    else
+        r.items = nil
+    end
+    return r
+end
+
+--- Marks an entry refunded (never twice) and, for an unpaid one, paid. Returns true if it changed.
+--- (paid_at is assigned before paid: MySQL evaluates SET left to right.)
+function store.markRefunded(cid, id, paidAt)
+    local n = MySQL.update.await([[
+        UPDATE sd_carrier_history SET paid_at = CASE WHEN paid = 1 THEN paid_at ELSE ? END, paid = 1, refunded = 1
+        WHERE citizenid = ? AND id = ? AND refunded = 0
+    ]], { paidAt, cid, id })
+    return (n or 0) > 0
+end
+
+--- Gives every account on a plan type a promotion it hasn't used. scope: 'all' | 'postpaid' | 'prepaid'.
+--- `postpaidIds` / `prepaidIds` are the plan ids of each type. Returns how many accounts got it.
+function store.bulkPromo(promoId, cycles, scope, postpaidIds, prepaidIds)
+    local ids = {}
+    if scope == 'postpaid' or scope == 'all' then for _, id in ipairs(postpaidIds) do ids[#ids + 1] = id end end
+    if scope == 'prepaid' or scope == 'all' then for _, id in ipairs(prepaidIds) do ids[#ids + 1] = id end end
+    if #ids == 0 then return 0 end
+    local marks = {}
+    for i = 1, #ids do marks[i] = '?' end
+    local params = { promoId, cycles, promoId }
+    for _, id in ipairs(ids) do params[#params + 1] = id end
+    params[#params + 1] = promoId
+    return MySQL.update.await(([[
+        UPDATE sd_carrier_accounts
+        SET promo_id = ?, promo_cycles_left = ?,
+            promos_used = CONCAT(promos_used, CASE WHEN promos_used = '' THEN '' ELSE ',' END, ?)
+        WHERE plan_chosen = 1 AND plan_id IN (%s) AND FIND_IN_SET(?, promos_used) = 0
+          AND (promo_id IS NULL OR promo_cycles_left = 0)
+    ]]):format(table.concat(marks, ',')), params)
+end
+
+--- Numbers for the staff dashboard. `now` = current time, `plans` = { [planId] = 'postpaid'|'payg'|'bundle' }.
+function store.stats(now, plans)
+    local out = { accounts = { postpaid = 0, payg = 0, bundle = 0, none = 0 }, byPlan = {} }
+    for _, r in ipairs(MySQL.query.await('SELECT plan_id, plan_chosen, COUNT(*) AS n FROM sd_carrier_accounts GROUP BY plan_id, plan_chosen') or {}) do
+        local n = tonumber(r.n) or 0
+        if tonumber(r.plan_chosen) == 1 then
+            local kind = plans[r.plan_id] or 'postpaid'
+            out.accounts[kind] = out.accounts[kind] + n
+            out.byPlan[r.plan_id] = (out.byPlan[r.plan_id] or 0) + n
+        else
+            out.accounts.none = out.accounts.none + n
+        end
+    end
+    local o = MySQL.single.await([[
+        SELECT SUM(balance_due > 0) AS overdue, COALESCE(SUM(balance_due), 0) AS owed,
+               SUM(status = 'suspended') AS suspended, SUM(paused_at IS NOT NULL) AS paused,
+               COALESCE(SUM(credit), 0) AS credit
+        FROM sd_carrier_accounts
+    ]]) or {}
+    out.overdue, out.owed = tonumber(o.overdue) or 0, tonumber(o.owed) or 0
+    out.suspended, out.paused, out.credit = tonumber(o.suspended) or 0, tonumber(o.paused) or 0, tonumber(o.credit) or 0
+
+    -- money in: what players paid with bank money, minus refunds. Spending credit is not new money.
+    out.revenue = { day = 0, week = 0, month = 0, byKind = {} }
+    local cut1, cut7, cut30 = now - 86400, now - 7 * 86400, now - 30 * 86400
+    for _, r in ipairs(MySQL.query.await([[
+        SELECT kind, SUM(CASE WHEN paid_at >= ? THEN amount ELSE 0 END) AS d1,
+                     SUM(CASE WHEN paid_at >= ? THEN amount ELSE 0 END) AS d7, SUM(amount) AS d30
+        FROM sd_carrier_history
+        WHERE paid = 1 AND pay = 'bank' AND kind <> 'adjust' AND paid_at >= ?
+        GROUP BY kind
+    ]], { cut1, cut7, cut30 }) or {}) do
+        local sign = r.kind == 'refund' and -1 or 1
+        local d1, d7, d30 = (tonumber(r.d1) or 0) * sign, (tonumber(r.d7) or 0) * sign, (tonumber(r.d30) or 0) * sign
+        out.revenue.day, out.revenue.week, out.revenue.month = out.revenue.day + d1, out.revenue.week + d7, out.revenue.month + d30
+        out.revenue.byKind[r.kind] = d30
+    end
+
+    local today = math.floor(now / 86400)
+    out.activeWeek = tonumber(MySQL.scalar.await('SELECT COUNT(DISTINCT citizenid) FROM sd_carrier_usage_daily WHERE day >= ?', { today - 6 })) or 0
+    out.topData = {}
+    for i, r in ipairs(MySQL.query.await([[
+        SELECT citizenid, SUM(data_mb) AS mb FROM sd_carrier_usage_daily WHERE day >= ?
+        GROUP BY citizenid ORDER BY mb DESC LIMIT 5
+    ]], { today - 6 }) or {}) do
+        out.topData[i] = { key = r.citizenid, mb = tonumber(r.mb) or 0 }
+    end
+    return out
 end
 
 --- The SIM identity for a phone number, from sd-phone's own SIM table.

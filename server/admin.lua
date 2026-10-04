@@ -65,7 +65,11 @@ local function describe(key, row)
         ('Balance due: %s%s'):format(priceText(row.balance_due), row.balance_since and (' since ' .. dayText(row.balance_since)) or ''),
         ('Credit: %s'):format(priceText(row.credit)),
         ('Auto-pay: %s'):format(core.truthy(row.auto_pay) and 'on' or 'off'),
+        ('Add-ons: %s MB, %s min, %s texts'):format(row.extra_data_mb, row.extra_minutes, row.extra_texts),
     }
+    if row.auto_topup_amount > 0 then
+        lines[#lines + 1] = ('Auto top-up: %s when credit is %s or less'):format(priceText(row.auto_topup_amount), priceText(row.auto_topup_below))
+    end
     if row.contract_ends then lines[#lines + 1] = ('Contract ends: %s (exit fee %s)'):format(dayText(row.contract_ends), priceText(core.exitFee(row))) end
     if row.promo_id then lines[#lines + 1] = ('Promo: %s (%s bills left)'):format(row.promo_id, row.promo_cycles_left) end
     return table.concat(lines, '\n')
@@ -76,7 +80,11 @@ local HELP = table.concat({
     '/carrier setplan <target> <planId>   (puts them on the plan now, free)',
     '/carrier unplan <target>              (back to "no plan")',
     '/carrier credit <target> <amount>     (+/- prepaid credit)',
-    '/carrier adddata <target> <mb>        (+/- add-on MB this cycle)',
+    '/carrier addextra <target> <data|minutes|texts> <amount>   (+/- add-on amount this cycle; adddata <target> <mb> still works)',
+    '/carrier history <target> [count]     (recent bills, fees, top-ups, add-ons with their ids)',
+    '/carrier refund <target> <entryId> [credit]   (pays a bill/fee/add-on/top-up back; an unpaid bill is waived)',
+    '/carrier bulkpromo <promoId> [all|postpaid|prepaid]   (gives every matching account a promotion)',
+    '/carrier stats | dash | validate      (numbers, an in-game page, a check of config.lua)',
     '/carrier clearbill <target>           (waive the balance)',
     '/carrier suspend <target> | restore <target>',
     '/carrier resetusage <target>          (zero this cycle\'s usage)',
@@ -120,14 +128,40 @@ ACTIONS.credit = function(key, row, args)
     return ('Credit is now %s'):format(priceText(new)), ('credit %+.2f'):format(amount)
 end
 
-ACTIONS.adddata = function(key, row, args)
-    local mb = tonumber(args[1])
-    if not mb or mb == 0 then return nil, 'Give a number of MB, e.g. 1024 or -500' end
-    local new = math.max(0, row.extra_data_mb + mb)
-    core.save(key, { extra_data_mb = new })
+local EXTRA_COL = { data = 'extra_data_mb', minutes = 'extra_minutes', texts = 'extra_texts' }
+
+ACTIONS.addextra = function(key, row, args)
+    local what = args[1] and args[1]:lower()
+    local col = EXTRA_COL[what]
+    local amount = tonumber(args[2])
+    if not col then return nil, 'Say what: data, minutes or texts' end
+    if not amount or amount == 0 then return nil, 'Give an amount, e.g. 100 or -50' end
+    local new = math.max(0, (row[col] or 0) + amount)
+    core.save(key, { [col] = new })
     core._.setKnown(key, row)
     core.pushUpdate(key)
-    return ('Add-on data is now %s MB'):format(new), ('adddata %+d'):format(mb)
+    return ('Add-on %s is now %s'):format(what, new), ('addextra %s %+d'):format(what, amount)
+end
+ACTIONS.adddata = function(key, row, args) return ACTIONS.addextra(key, row, { 'data', args[1] }) end
+
+ACTIONS.history = function(key, row, args)
+    local n = math.min(30, math.max(1, math.floor(tonumber(args[1]) or 10)))
+    local lines = {}
+    for _, h in ipairs(store.listHistory(key, n)) do
+        lines[#lines + 1] = ('%s  %s  %s  %s%s  %s'):format(h.id, h.kind or 'bill', priceText(h.amount),
+            core.truthy(h.paid) and 'paid' or 'UNPAID', core.truthy(h.refunded) and ' (refunded)' or '',
+            os.date('%Y-%m-%d', h.at or 0))
+    end
+    if #lines == 0 then return 'No entries yet' end
+    return table.concat(lines, '\n')
+end
+
+ACTIONS.refund = function(key, row, args)
+    if not args[1] then return nil, 'Give the entry id (see /carrier history)' end
+    local mode = args[2] and args[2]:lower() == 'credit' and 'credit' or 'bank'
+    local ok, msg = core.refund(key, row, args[1], mode)
+    if not ok then return nil, msg end
+    return 'Done: ' .. msg, ('refund %s: %s'):format(args[1], msg)
 end
 
 ACTIONS.clearbill = function(key, row)
@@ -177,9 +211,89 @@ ACTIONS.promo = function(key, row, args, actor)
     return ('%s now has promotion %s'):format(key, found.id), ('promo=%s'):format(found.id)
 end
 
+-- The dashboard ---------------------------------------------------------------------------------
+
+local function sendSummary()
+    local wh = cfg.webhook or {}
+    if type(wh.url) ~= 'string' or wh.url == '' then return false end
+    local d = core.dashboard()
+    local body = {
+        username = wh.username or 'Aero Mobile',
+        embeds = { {
+            title = (Config.app.name or 'Aero Mobile') .. ' summary',
+            description = table.concat(core.dashboardLines(d), '\n'),
+            color = 3447003,
+            timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ', d.at),
+        } },
+    }
+    PerformHttpRequest(wh.url, function(code)
+        if code and code >= 300 then print(('[as-carrier] the Discord summary was refused (HTTP %s)'):format(tostring(code))) end
+    end, 'POST', json.encode(body), { ['Content-Type'] = 'application/json' })
+    return true
+end
+
+CreateThread(function()
+    local wh = cfg.webhook or {}
+    if type(wh.url) ~= 'string' or wh.url == '' then return end
+    local every = math.max(1, tonumber(wh.everyHours) or 24) * 3600
+    local last = os.time()
+    while not core.gateLoaded() do Wait(1000) end
+    while true do
+        Wait(60000)
+        if os.time() - last >= every then
+            last = os.time()
+            local ok, err = pcall(sendSummary)
+            if not ok then print(('[as-carrier] could not send the Discord summary: %s'):format(tostring(err))) end
+        end
+    end
+end)
+
+-- Actions that are about the whole server, not one account.
+local GLOBAL = {}
+
+GLOBAL.stats = function(src, args)
+    if args.target and args.target:lower() == 'send' then
+        return sendSummary() and 'Summary sent to Discord' or 'No webhook url is set in Config.admin.webhook'
+    end
+    return table.concat(core.dashboardLines(core.dashboard()), '\n')
+end
+
+GLOBAL.dash = function(src, args)
+    local d = core.dashboard()
+    if not src or src == 0 then return table.concat(core.dashboardLines(d), '\n') end
+    TriggerClientEvent('sd_carrier:client:dash', src, { lines = core.dashboardLines(d), title = (Config.app.name or 'Aero Mobile') })
+    return nil
+end
+
+GLOBAL.validate = function()
+    local issues = core.checkConfig()
+    if #issues == 0 then return 'config.lua looks fine' end
+    local lines = {}
+    for _, i in ipairs(issues) do lines[#lines + 1] = ('%s: %s'):format(i.level, i.text) end
+    return table.concat(lines, '\n')
+end
+
+GLOBAL.bulkpromo = function(src, args, actor)
+    if not args.target then return 'Give a promotion id from Config.promotions' end
+    local n, err = core.bulkPromo(args.target, args.value)
+    if not n then return err end
+    store.audit(actor, 'ALL', 'bulkpromo', ('%s to %s account(s) (%s)'):format(args.target, n, args.value or 'all'))
+    print(('[as-carrier] %s: bulkpromo %s to %s account(s)'):format(actor, args.target, n))
+    return ('%s given to %s account(s)'):format(args.target, n)
+end
+
 local function handle(src, args)
     local action = args.action and args.action:lower() or 'help'
     if action == 'help' then return say(src, HELP) end
+    if GLOBAL[action] then
+        local ok, text = pcall(GLOBAL[action], src, args, actorName(src))
+        if not ok then
+            print(('[as-carrier] admin command failed: %s'):format(tostring(text)))
+            return say(src, 'That failed, see the server console.')
+        end
+        if text then say(src, text) end
+        return
+    end
     local run = ACTIONS[action]
     if not run then return say(src, 'Unknown action.\n' .. HELP) end
 
@@ -207,7 +321,7 @@ local function handle(src, args)
 end
 
 local params = {
-    { name = 'action', type = 'string', help = 'help | info | setplan | unplan | credit | adddata | clearbill | suspend | restore | resetusage | promo', optional = true },
+    { name = 'action', type = 'string', help = 'help | info | history | refund | setplan | unplan | credit | addextra | clearbill | suspend | restore | resetusage | promo | bulkpromo | stats | dash | validate', optional = true },
     { name = 'target', type = 'string', help = 'server id, phone number or account key', optional = true },
     { name = 'value', type = 'string', help = 'plan id / amount / MB / promotion id', optional = true },
     { name = 'extra', type = 'string', optional = true },

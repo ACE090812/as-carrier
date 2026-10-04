@@ -74,10 +74,14 @@ Config = {
         -- What happens when the data allowance (plan + add-ons) runs out. A plan can override it with
         -- its own `outOfData`.
         --   'bill'     keep working, extra MB are billed at the plan's rate (postpaid) or taken from credit
-        --   'throttle' keep working at reduced speed, nothing extra is billed ("no surprise bills")
+        --   'throttle' keep working at reduced speed (see throttleKBps), nothing extra is billed ("no surprise bills")
         --   'block'    mobile data stops until the next cycle (or an add-on is bought), nothing extra is billed
         -- Prepaid pay-as-you-go ('payg') always takes extra data from credit.
         outOfData = 'bill',
+        -- Throttled downloads run at this speed (kilobytes per second). sd-phone's app store waits that long
+        -- when you add the one-line edit from the README. The wait is never longer than throttleMaxSeconds.
+        throttleKBps = 256,
+        throttleMaxSeconds = 90,
 
         -- Phone notifications when an allowance is nearly or fully used, and when credit runs low.
         alerts = {
@@ -86,15 +90,21 @@ Config = {
             lowCredit = 2,              -- prepaid: warn when credit drops to this amount (0 = off)
         },
 
-        -- Data add-ons: extra MB bought on top of a plan, for this cycle only. Postpaid players pay from
-        -- their bank straight away, prepaid players pay from credit. Not offered on unlimited-data plans.
+        -- Add-ons: extra data, minutes or texts bought on top of a plan, for this cycle only. An add-on can
+        -- carry any of `dataMB`, `minutes`, `texts`. Postpaid players pay from their bank straight away,
+        -- prepaid players pay from credit. An add-on is not offered where a plan is already unlimited in that
+        -- kind (an add-on that adds nothing to the plan is hidden).
         addons = {
-            carryOver = false,          -- true = unused add-on MB roll into the next cycle
-            maxExtraMB = 20480,         -- most add-on MB an account can hold at once
+            carryOver = false,          -- true = unused add-on amounts roll into the next cycle
+            maxExtraMB = 20480,         -- most of each an account can hold at once (0 = no limit)
+            maxExtraMinutes = 1000,
+            maxExtraTexts = 1000,
             list = {
                 { id = 'data1',  label = '1 GB Data Boost',  dataMB = 1024, price = 5 },
                 { id = 'data3',  label = '3 GB Data Boost',  dataMB = 3072, price = 12 },
                 { id = 'data10', label = '10 GB Data Boost', dataMB = 10240, price = 30 },
+                { id = 'min100', label = '100 Extra Minutes', minutes = 100, price = 4 },
+                { id = 'txt100', label = '100 Extra Texts',   texts = 100,   price = 3 },
             },
         },
 
@@ -143,6 +153,29 @@ Config = {
             max = 200,
             presets = { 5, 10, 20, 50 },
         },
+        -- An option each player can switch on: when credit drops to their chosen level the chosen amount is
+        -- taken from their bank and added (also at the end of a bundle with auto-renew, if credit is short).
+        -- A failed attempt is retried after retrySeconds and the player is told once.
+        autoTopUp = {
+            enabled = true,
+            amounts = { 5, 10, 20, 50 },    -- amounts to choose from (inside the top-up min / max)
+            below   = { 1, 2, 5 },          -- "when credit drops to" levels to choose from
+            retrySeconds = 600,
+        },
+    },
+
+    -- Receipts: the "Send to my phone" button on a receipt. 'notification' shows the receipt as a banner on
+    -- the phone (always works). 'custom' calls `send` below, so a receipt can go to any phone app.
+    receipts = {
+        delivery = 'notification',
+        -- send = function(source, subject, body, entry) ... return true end
+        --   source  the player, subject a short title, body the plain-text receipt, entry the bill / fee / top-up
+        --   (id, kind, label, amount, paid, items). Return true when it was delivered, false/nil to fall back
+        --   to the banner. Example for a mail app whose server export takes (source, mail):
+        --     send = function(source, subject, body)
+        --         return pcall(function() exports['sd-phone']:sendMail(source, { subject = subject, body = body }) end)
+        --     end,
+        --   Check the export's real arguments in your phone's docs first.
     },
 
     -- Contract plans (a plan with `contractCycles`). Leaving early costs `feeRate` of the plan fees still to
@@ -200,6 +233,13 @@ Config = {
         enabled = true,
         command = 'carrier',
         ace = 'group.admin',
+        -- A summary posted to a Discord channel every few hours (accounts, money in, overdue, top data users).
+        -- Leave url empty to switch it off. /carrier stats and /carrier dash show the same numbers in game.
+        webhook = {
+            url = '',
+            everyHours = 24,
+            username = 'Aero Mobile',
+        },
     },
 
     -- How many days the Usage tab shows.
