@@ -180,10 +180,12 @@
 
     /* sheet */
     .dim { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 20; animation: fade .2s; }
-    .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 26px 26px 0 0; padding: 10px 18px 30px; z-index: 21; animation: up .25s ease; }
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 88%; overflow-y: auto; background: var(--card); border-radius: 26px 26px 0 0; padding: 10px 18px 30px; z-index: 21; animation: up .25s ease; scrollbar-width: none; }
+    .sheet::-webkit-scrollbar { display: none; }
     .sheet .grab { width: 38px; height: 5px; border-radius: 9px; background: var(--track); margin: 0 auto 14px; }
     .sheet h3 { font-size: 19px; text-align: center; margin: 0; }
     .sheet p { font-size: 13px; color: var(--dim); text-align: center; margin: 6px 0 0; line-height: 1.45; }
+    .sheet p.warn { color: var(--orange); }
     .cmp { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 16px 0; }
     .cmp > div { flex: 1; background: var(--card2); border-radius: 16px; padding: 12px; text-align: center; min-width: 0; }
     .cmp > div b { display: block; font-size: 15px; }
@@ -192,11 +194,89 @@
     .cmp .ar { flex: 0 0 auto; background: none; padding: 0; color: var(--dim); }
     .cmp .ar svg { width: 20px; height: 20px; }
     .sheet .cancel { display: block; width: 100%; text-align: center; margin-top: 14px; font-size: 15px; color: var(--accent); font-weight: 600; }
+    .sheet .fine { font-size: 11.5px; color: var(--dim); text-align: center; margin-top: 10px; line-height: 1.4; }
 
     .toast { position: absolute; left: 20px; right: 20px; bottom: 96px; background: #2c2c2e; color: #fff; padding: 12px 16px; border-radius: 14px; font-size: 13.5px; text-align: center; z-index: 30; box-shadow: 0 8px 24px var(--shadow); animation: fade .2s; }
     .toast.err { background: #d92d20; }
     @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes up { from { transform: translateY(100%); } to { transform: none; } }
+
+    /* more banners and tags */
+    .banner.orange { background: rgba(255,159,10,.15); color: var(--orange); }
+    .banner.green { background: rgba(48,209,88,.14); color: #22a848; }
+    .banner .lnk[disabled] { opacity: .5; }
+    .tag.ct { background: rgba(255,159,10,.18); color: var(--orange); }
+    .tag.pre { background: rgba(10,132,255,.16); color: var(--accent); }
+    .plan .h .p s { font-size: 13px; color: var(--dim); font-weight: 500; margin-right: 2px; }
+    .offer { margin-top: 8px; font-size: 12px; font-weight: 600; color: #22a848; background: rgba(48,209,88,.13); padding: 6px 10px; border-radius: 10px; }
+    .plan .ct-note { margin-top: 6px; font-size: 11.5px; color: var(--orange); line-height: 1.4; }
+    .cap.first { padding-top: 6px; }
+
+    /* prepaid credit card */
+    .credit { margin-top: 12px; display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: 20px; padding: 14px 16px; gap: 10px; }
+    .credit .t { font-size: 12px; font-weight: 600; color: var(--dim); }
+    .credit .a { font-size: 28px; font-weight: 800; margin-top: 1px; }
+    .credit.low .a { color: var(--red); }
+    .btn.sm { padding: 9px 18px; font-size: 14px; }
+    .btn.ghost { background: var(--card2); color: var(--text); }
+    .add-row { display: flex; gap: 10px; margin-top: 10px; }
+    .add-row .btn { flex: 1; text-align: center; border-radius: 14px; padding: 12px; font-size: 14px; }
+
+    /* manage rows */
+    .row-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left; padding: 13px 16px; font-size: 14.5px; border-bottom: 1px solid var(--line); gap: 10px; }
+    .row-btn:last-child { border: 0; }
+    .row-btn small { display: block; color: var(--dim); font-size: 12px; margin-top: 2px; }
+    .row-btn.red { color: var(--red); }
+    .row-btn svg.ic { color: var(--dim); }
+
+    /* inputs and chips */
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; justify-content: center; }
+    .chip { padding: 9px 16px; border-radius: 99px; background: var(--card2); font-size: 14px; font-weight: 700; }
+    .chip.on { background: var(--accent); color: #fff; }
+    .field { width: 100%; margin-top: 12px; background: var(--card2); border: 0; border-radius: 14px; padding: 13px 14px; font: inherit; font-size: 16px; color: var(--text); outline: none; text-align: center; }
+    .field::placeholder { color: var(--dim); }
+    .codebox { margin-top: 12px; }
+    .codebox label { display: block; font-size: 12px; color: var(--dim); margin: 0 4px 4px; text-align: left; }
+    .codebox .field { margin-top: 0; text-align: left; text-transform: uppercase; letter-spacing: .06em; font-size: 15px; }
+    .opt { display: flex; justify-content: space-between; align-items: center; width: 100%; background: var(--card2); border-radius: 16px; padding: 13px 14px; margin-top: 8px; text-align: left; gap: 10px; }
+    .opt b { font-size: 15px; display: block; }
+    .opt small { font-size: 12px; color: var(--dim); }
+    .opt .pr { font-size: 16px; font-weight: 800; white-space: nowrap; }
+
+    /* usage */
+    .seg { display: flex; background: var(--card); border-radius: 12px; padding: 3px; gap: 3px; }
+    .seg button { flex: 1; padding: 8px 4px; border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--soft); }
+    .seg button.on { background: var(--btn-bg); color: var(--btn-fg); }
+    .chart { margin-top: 12px; background: var(--card); border-radius: 22px; padding: 16px 14px 12px; }
+    .chart .top { display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px 10px; }
+    .chart .top b { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+    .chart .top span { font-size: 12px; color: var(--dim); }
+    .bars { position: relative; display: flex; align-items: flex-end; gap: 4px; height: 130px; border-bottom: 1px solid var(--line); }
+    .bars .gl { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); pointer-events: none; }
+    .bars .gl span { position: absolute; right: 0; top: -15px; font-size: 10px; color: var(--dim); }
+    .bar-c { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 0; }
+    .bar-c i { display: block; width: 100%; min-height: 3px; border-radius: 5px 5px 2px 2px; background: var(--accent); }
+    .bar-c i.zero { opacity: .18; }
+    .bar-c i.old { opacity: .45; }
+    .bar-c i.today { box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--accent); }
+    .bar-c.cyc i { background-image: none; }
+    .axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--dim); padding-top: 6px; }
+    .stats { display: flex; gap: 10px; margin-top: 12px; }
+    .stat { flex: 1; background: var(--card); border-radius: 18px; padding: 12px 8px; text-align: center; min-width: 0; }
+    .stat b { display: block; font-size: 16px; }
+    .stat small { display: block; font-size: 11px; color: var(--dim); margin-top: 3px; }
+    .legend { font-size: 11.5px; color: var(--dim); padding: 10px 6px 0; line-height: 1.4; }
+
+    /* activity icons */
+    .bill .ico.b { background: rgba(10,132,255,.15); color: var(--accent); }
+    .bill .ico.o { background: rgba(255,159,10,.16); color: var(--orange); }
+    .bill .rcp { margin-left: 46px; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--accent); }
+    .det .disc span:last-child { color: #22a848; }
+
+    /* receipt */
+    .receipt { margin-top: 14px; background: var(--card2); border-radius: 16px; padding: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); text-align: left; }
+    .two { display: flex; gap: 10px; margin-top: 14px; }
+    .two .btn { flex: 1; text-align: center; border-radius: 14px; padding: 13px; font-size: 14px; }
 </style>
 </head>
 <body data-theme="dark">
@@ -214,6 +294,11 @@
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v9h14v-9M7.5 8a2.5 2.5 0 1 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 1 1 0 5"/></symbol>
   </defs>
 </svg>
 <div id="app">
@@ -224,14 +309,18 @@
     var RESOURCE = 'as-carrier';
     var S = null;              // last status from the server
     var loaded = false;
-    var tab = 'overview';      // overview | plans | bills
-    var sheet = null;          // { kind: 'start' | 'switch', planId }
+    var tab = 'overview';      // overview | plans | usage | bills
+    var sheet = null;          // { kind: 'plan' | 'topup' | 'addon' | 'pause' | 'cancel' | 'receipt', ... }
     var busy = false;
     var openBill = null;       // history id whose breakdown is open
+    var metric = 'data';       // usage chart: data | minutes | texts
     var toast = null;          // { text, err }
     var toastTimer = null;
     var cur = '£';
     var DICT = {};             // translations from locales/<code>.lua; English below is the fallback
+    var promoCode = '';
+    var topupAmount = '';
+    var pauseDays = '';
 
     function post(endpoint, data) {
         return fetch('https://' + RESOURCE + '/' + endpoint, {
@@ -260,8 +349,14 @@
     }
     function raw(x) { return { raw: x }; }
     function icon(id) { return '<svg class="ic"><use href="#' + id + '"/></svg>'; }
+    // toast and receipt text is escaped again later, so take the plain text back out of L()
+    function plain(s) { return String(s).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"); }
 
-    function fmt(n) { return cur + (Math.round((n || 0) * 100) / 100).toFixed(2); }
+    function fmt(n) {
+        n = n || 0;
+        var cents = Math.round(Math.abs(n) * 100);
+        return (n < 0 && cents > 0 ? '-' : '') + cur + (cents / 100).toFixed(2);
+    }
     function fmtPrice(n) { return cur + (Math.round(n * 100) / 100 === Math.round(n) ? String(Math.round(n)) : (Math.round(n * 100) / 100).toFixed(2)); }
     function fmtRate(r) {
         if (cur === '£' && r < 1) return L('ui.pence', '%sp', Math.round(r * 1000) / 10);
@@ -281,12 +376,19 @@
         if (kind === 'data') return mbText(v);
         return kind === 'min' ? L('ui.nMin', '%s min', v) : L('ui.nTexts', '%s texts', v);
     }
+    function isPrepaid(p) { return !!p && (p.type === 'payg' || p.type === 'bundle'); }
 
-    function statusLabel(s) {
-        return s === 'suspended' ? L('status.suspended', 'Suspended') : (s === 'due' ? L('status.due', 'Payment due') : L('status.current', 'Up to date'));
+    // What the account is doing right now: a label, and whether to colour it as a warning (y) or a problem (r).
+    function state() {
+        if (S.paused) return { label: L('status.paused', 'Paused'), hero: ' warn', pill: ' y' };
+        if (S.status === 'suspended') return { label: L('status.suspended', 'Suspended'), hero: ' bad', pill: ' r' };
+        if (S.status === 'expired' || S.blocked === 'expired') return { label: L('status.expired', 'Ended'), hero: ' bad', pill: ' r' };
+        if (S.blocked === 'no_credit') return { label: L('status.noCredit', 'No credit'), hero: ' bad', pill: ' r' };
+        if (S.status === 'limited') return { label: L('status.limited', 'Data off'), hero: ' warn', pill: ' y' };
+        if (S.status === 'due') return { label: L('status.due', 'Payment due'), hero: ' warn', pill: ' y' };
+        if (isPrepaid(S.plan)) return { label: L('status.active', 'Active'), hero: '', pill: '' };
+        return { label: L('status.current', 'Up to date'), hero: '', pill: '' };
     }
-    function heroClass(s) { return s === 'suspended' ? ' bad' : (s === 'due' ? ' warn' : ''); }
-    function pillClass(s) { return s === 'suspended' ? ' r' : (s === 'due' ? ' y' : ''); }
 
     // ---- pieces ----
     var RING_C = 2 * Math.PI * 27;
@@ -314,6 +416,7 @@
     }
 
     function features(p) {
+        if (p.type === 'payg') return '';
         return '<div class="feat">' +
             '<span>' + icon('i-phone') + unl(p.minutes, 'min') + '</span>' +
             '<span>' + icon('i-msg') + unl(p.texts, 'text') + '</span>' +
@@ -324,11 +427,37 @@
         if (p.minutes >= 0 && p.overagePerMinute > 0) parts.push(L('ui.perMin', '%s per min', raw(fmtRate(p.overagePerMinute))));
         if (p.texts >= 0 && p.overagePerText > 0) parts.push(L('ui.perText', '%s per text', raw(fmtRate(p.overagePerText))));
         if (p.dataMB >= 0 && p.overagePerMB > 0) parts.push(L('ui.perMB', '%s per MB', raw(fmtRate(p.overagePerMB))));
-        return parts.length ? '<div class="ov">' + L('ui.extraUse', 'Extra use: %s', raw(parts.join(', '))) + '</div>' : '';
+        if (!parts.length) return '';
+        var key = p.type === 'payg' ? ['ui.rates', 'Rates: %s'] : ['ui.extraUse', 'Extra use: %s'];
+        return '<div class="ov">' + L(key[0], key[1], raw(parts.join(', '))) + '</div>';
     }
     function planById(id) {
         for (var i = 0; i < S.plans.length; i++) if (S.plans[i].id === id) return S.plans[i];
         return null;
+    }
+    function offerFor(p) { return S.offers && S.offers[p.id]; }
+
+    function priceBlock(p) {
+        if (p.type === 'payg') return '<div class="p">' + L('ui.payg', 'Pay as you go') + '</div>';
+        var per = p.type === 'bundle' ? L('ui.perDays', '/%s days', p.durationDays) : L('ui.perCycleShort', '/cycle');
+        var o = offerFor(p);
+        if (o && o.firstPrice < p.price) return '<div class="p num"><s>' + fmtPrice(p.price) + '</s>' + fmtPrice(o.firstPrice) + '<small>' + per + '</small></div>';
+        return '<div class="p num">' + fmtPrice(p.price) + '<small>' + per + '</small></div>';
+    }
+    function planTags(p) {
+        var t = '';
+        if (p.contractCycles > 0) t += '<span class="tag ct">' + L('ui.contractTag', '%s-cycle contract', p.contractCycles) + '</span>';
+        if (isPrepaid(p)) t += '<span class="tag pre">' + (p.type === 'bundle' ? L('ui.bundleTag', 'Bundle') : L('ui.prepaidTag', 'Prepaid')) + '</span>';
+        return t;
+    }
+    function offerLine(p) {
+        var o = offerFor(p);
+        if (!o) return '';
+        return '<div class="offer">' + icon('i-gift') + ' ' + esc(o.label) + '</div>';
+    }
+    function contractNote(p) {
+        if (!(p.contractCycles > 0)) return '';
+        return '<div class="ct-note">' + L('ui.contractNote', 'Leaving early costs a fee.') + '</div>';
     }
 
     function dueCard(sub) {
@@ -336,8 +465,20 @@
             (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>' +
             '<button class="btn" data-act="pay"' + (busy ? ' disabled' : '') + '>' + L('ui.payNow', 'Pay now') + '</button></div>';
     }
+    function creditCard() {
+        var low = S.credit <= 0;
+        return '<div class="credit' + (low ? ' low' : '') + '"><div><div class="t">' + L('ui.credit', 'Credit') + '</div><div class="a num">' + fmt(S.credit) + '</div></div>' +
+            '<button class="btn sm" data-act="topupOpen">' + L('ui.topUp', 'Top up') + '</button></div>';
+    }
 
     // ---- screens ----
+    function planCard(p, extra) {
+        extra = extra || {};
+        return '<button class="plan' + (extra.cls || '') + '" ' + (extra.noClick ? '' : 'data-act="pick" data-plan="' + esc(p.id) + '"') + '>' +
+            '<div class="h"><div><b>' + esc(p.label) + '</b>' + (extra.tags || '') + (extra.noPopular ? '' : (p.popular ? '<span class="tag pop">' + L('ui.popular', 'Popular') + '</span>' : '')) + planTags(p) + '</div>' + priceBlock(p) + '</div>' +
+            features(p) + offerLine(p) + (extra.showOv === false ? '' : overage(p)) + contractNote(p) + (extra.action || '') + '</button>';
+    }
+
     function viewChoose() {
         var h = '<div class="safe-top"></div>' +
             '<div class="head"><img class="logo" src="header-icon.png" alt=""><b>Aero Mobile</b></div>' +
@@ -352,14 +493,21 @@
         if (S.balanceDue > 0) {
             h += dueCard(L('ui.oldDebt', 'Unpaid from before. It stays on this SIM until it is paid.'));
         }
-        h += '<div style="height:10px"></div>';
-        S.plans.forEach(function (p) {
-            h += '<button class="plan" data-act="pick" data-plan="' + esc(p.id) + '">' +
-                '<div class="h"><div><b>' + esc(p.label) + '</b>' + (p.popular ? '<span class="tag pop">' + L('ui.popular', 'Popular') + '</span>' : '') + '</div>' +
-                '<div class="p num">' + fmtPrice(p.price) + '<small>' + L('ui.perCycleShort', '/cycle') + '</small></div></div>' +
-                features(p) + overage(p) +
-                '<span class="go">' + L('ui.chooseBtn', 'Choose %s', p.label) + '</span></button>';
-        });
+        if (S.credit > 0) h += creditCard();
+        var monthly = S.plans.filter(function (p) { return !isPrepaid(p); });
+        var prepaid = S.plans.filter(isPrepaid);
+        if (monthly.length) {
+            h += '<div class="cap first">' + L('ui.monthlyPlans', 'Monthly plans') + '</div>';
+            monthly.forEach(function (p) {
+                h += planCard(p, { action: '<span class="go">' + L('ui.chooseBtn', 'Choose %s', p.label) + '</span>' });
+            });
+        }
+        if (prepaid.length) {
+            h += '<div class="cap">' + L('ui.prepaidPlans', 'Prepaid, no bill') + '</div>';
+            prepaid.forEach(function (p) {
+                h += planCard(p, { action: '<span class="go">' + L('ui.chooseBtn', 'Choose %s', p.label) + '</span>' });
+            });
+        }
         h += '<div class="hint">' + (S.planLock
             ? L('ui.lockHint', 'Your plan runs for %s days and is locked for that time. You can queue a change for your next bill.', S.cycleDays)
             : L('ui.freeHint', 'You can change plan whenever you like.')) + '</div>';
@@ -373,52 +521,131 @@
         return { pct: Math.min(100, (el / total) * 100), day: Math.min(S.cycleDays, Math.floor(el / 86400) + 1) };
     }
 
-    function viewOverview() {
-        var bad = S.status === 'suspended';
-        var pg = progress();
-        var left, right;
-        if (S.status === 'suspended') { left = L('ui.overdue', 'Overdue'); right = S.payBy ? L('ui.wasDue', 'Was due %s', day(S.payBy)) : ''; }
-        else if (S.status === 'due') { left = L('ui.dayOf', 'Day %s of %s', pg.day, S.cycleDays); right = S.payBy ? L('ui.payBy', 'Pay by %s', day(S.payBy)) : ''; }
-        else { left = L('ui.dayOf', 'Day %s of %s', pg.day, S.cycleDays); right = L('ui.renews', 'Renews %s', day(S.dueAt)); }
+    function banners() {
+        var h = '';
+        function ban(cls, ico, title, body, btn) {
+            return '<div class="banner ' + cls + '">' + icon(ico) + '<div class="tx"><b>' + title + '</b>' + (body ? '<span>' + body + '</span>' : '') + (btn || '') + '</div></div>';
+        }
+        if (S.paused) {
+            h += ban('blue', 'i-pause', L('ui.pausedTitle', 'Service paused'),
+                L('ui.pausedBody', 'Calls, texts and data are off until %s. You are not billed while paused. Emergency numbers still work.', day(S.paused.untilAt)),
+                '<button class="lnk" data-act="resume"' + (busy ? ' disabled' : '') + '>' + L('ui.resumeNow', 'Resume now') + '</button>');
+        }
+        if (S.status === 'suspended') {
+            h += ban('red', 'i-warn', L('ui.suspendedTitle', 'Service suspended'), L('ui.suspendedBody', 'Calls, texts and data are off until your bill is paid. Emergency numbers still work.'));
+        } else if (S.status === 'limited') {
+            h += ban('orange', 'i-warn', L('ui.limitedTitle', 'Mobile data is off'),
+                L('ui.limitedBody', 'Your bill is late. Pay it to switch data back on. Calls and texts stop on %s.', day(S.payBy)));
+        }
+        if (S.status === 'expired' || S.blocked === 'expired') {
+            h += ban('red', 'i-clock', L('ui.expiredTitle', 'Your bundle has ended'), L('ui.expiredBody', 'Calls, texts and data are off. Buy a bundle again to switch them on. Emergency numbers still work.'));
+        } else if (S.blocked === 'no_credit') {
+            h += ban('red', 'i-warn', L('ui.noCreditTitle', 'You are out of credit'), L('ui.noCreditBody', 'Top up to switch calls, texts and data back on. Emergency numbers still work.'));
+        }
+        if (S.dataState === 'throttled') {
+            h += ban('orange', 'i-data', L('ui.throttledTitle', 'Mobile data is slowed'), L('ui.throttledBody', 'You have used all your data. It runs at reduced speed until your next cycle, or add more data.'));
+        } else if (S.dataState === 'blocked' && S.dataReason === 'outOfData') {
+            h += ban('red', 'i-data', L('ui.dataOffTitle', 'Out of mobile data'), L('ui.dataOffBody', 'Mobile data is off until your next cycle. You can add more data below.'));
+        }
+        if (S.pendingCancel) {
+            h += ban('blue', 'i-clock', L('ui.cancellingTitle', 'Your plan ends on %s', day(S.dueAt)),
+                L('ui.cancellingBody', 'You keep your service until then.'),
+                '<button class="lnk" data-act="cancelPending"' + (busy ? ' disabled' : '') + '>' + L('ui.keepPlan', 'Keep my plan') + '</button>');
+        } else if (S.pendingPlan) {
+            h += ban('blue', 'i-clock', L('ui.switchingTo', 'Switching to %s on %s', S.pendingPlan.label, day(S.dueAt)),
+                L('ui.nextBillStill', 'Your next bill is still for %s.', S.plan.label),
+                '<button class="lnk" data-act="cancelPending"' + (busy ? ' disabled' : '') + '>' + L('ui.cancelSwitch', 'Cancel switch') + '</button>');
+        }
+        if (S.promo) {
+            h += ban('green', 'i-gift', esc(S.promo.label), L('ui.promoLeft', 'Applies to your next %s bill(s).', S.promo.cyclesLeft));
+        }
+        return h;
+    }
 
+    function viewOverview() {
+        var st = state();
+        var pre = isPrepaid(S.plan);
         var h = '<div class="safe-top"></div>' +
             '<div class="head"><img class="logo" src="header-icon.png" alt=""><b>Aero Mobile</b></div>' +
-            '<div class="scroll" id="scroll">';
-        if (bad) {
-            h += '<div class="banner red">' + icon('i-warn') + '<div class="tx"><b>' + L('ui.suspendedTitle', 'Service suspended') + '</b><span>' +
-                L('ui.suspendedBody', 'Calls, texts and data are off until your bill is paid. Emergency numbers still work.') + '</span></div></div>';
+            '<div class="scroll" id="scroll">' + banners();
+
+        // hero
+        var left = '', right = '', pct = null;
+        if (S.plan.type === 'bundle') {
+            var total = Math.max(1, S.dueAt - S.cycleStart);
+            pct = Math.min(100, (Math.max(0, S.now - S.cycleStart) / total) * 100);
+            left = (S.status === 'expired' || S.blocked === 'expired') ? L('ui.ended', 'Ended') : L('ui.endsOn', 'Ends %s', day(S.dueAt));
+            right = '';
+        } else if (S.plan.type === 'payg') {
+            pct = null;
+        } else {
+            var pg = progress();
+            pct = pg.pct;
+            if (S.status === 'suspended') { left = L('ui.overdue', 'Overdue'); right = S.payBy ? L('ui.wasDue', 'Was due %s', day(S.payBy)) : ''; }
+            else if (S.status === 'due' || S.status === 'limited') { left = L('ui.dayOf', 'Day %s of %s', pg.day, S.cycleDays); right = S.payBy ? L('ui.payBy', 'Pay by %s', day(S.payBy)) : ''; }
+            else if (S.paused) { left = L('ui.paused', 'Paused'); right = ''; }
+            else { left = L('ui.dayOf', 'Day %s of %s', pg.day, S.cycleDays); right = L('ui.renews', 'Renews %s', day(S.dueAt)); }
         }
-        if (S.pendingPlan) {
-            h += '<div class="banner blue">' + icon('i-clock') + '<div class="tx"><b>' + L('ui.switchingTo', 'Switching to %s on %s', S.pendingPlan.label, day(S.dueAt)) + '</b>' +
-                '<span>' + L('ui.nextBillStill', 'Your next bill is still for %s.', S.plan.label) + '</span>' +
-                '<button class="lnk" data-act="cancelPending"' + (busy ? ' disabled' : '') + '>' + L('ui.cancelSwitch', 'Cancel switch') + '</button></div></div>';
-        }
-        h += '<div class="hero' + heroClass(S.status) + '">' +
-            '<div class="pr"><b class="num">' + fmtPrice(S.plan.price) + '</b><small>' + L('ui.perCycle', 'per cycle') + '</small></div>' +
+        var priceTop = pre ? '' : '<div class="pr"><b class="num">' + fmtPrice(S.plan.price) + '</b><small>' + L('ui.perCycle', 'per cycle') + '</small></div>';
+        h += '<div class="hero' + st.hero + '">' + priceTop +
             '<div class="eb">' + L('ui.currentPlan', 'Current plan') + '</div><div class="pl">' + esc(S.plan.label) + '</div>' +
-            '<div class="pill' + pillClass(S.status) + '"><i></i>' + statusLabel(S.status) + '</div>' +
-            '<div class="cyc"><div class="t"><span>' + left + '</span><span>' + right + '</span></div>' +
-            '<div class="bar"><i style="width:' + pg.pct.toFixed(1) + '%"></i></div></div></div>';
-        if (S.balanceDue > 0) h += dueCard(bad ? L('ui.restoreHint', 'Pay to restore service. It switches back on straight away.') : '');
-        h += '<div class="rings">' +
-            ring(S.minutesUsed, S.plan.minutes, L('ui.minutes', 'Minutes'), 'var(--blue)', 'i-phone', false) +
-            ring(S.textsUsed, S.plan.texts, L('ui.texts', 'Texts'), 'var(--green)', 'i-msg', false) +
-            ring(S.dataMBUsed, S.plan.dataMB, L('ui.data', 'Data'), 'var(--orange)', 'i-data', true) + '</div>';
-        h += '<div class="list">' +
-            '<div class="li"><span>' + L('ui.estimated', 'Estimated this cycle') + '</span><span class="mut num">' + fmt(S.estimatedThisCycle) + '</span></div>' +
-            (S.lockedUntil ? '<div class="li"><span>' + L('ui.lockedUntil', 'Plan locked until') + '</span><span class="mut">' + day(S.lockedUntil) + '</span></div>' : '') +
-            '<div class="li"><div class="l2">' + L('ui.autoPay', 'Auto-pay') + '<small>' +
+            '<div class="pill' + st.pill + '"><i></i>' + st.label + '</div>' +
+            (pct === null ? '' : '<div class="cyc"><div class="t"><span>' + left + '</span><span>' + right + '</span></div>' +
+            '<div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>') + '</div>';
+
+        if (S.balanceDue > 0) {
+            var sub = '';
+            if (S.status === 'suspended') sub = L('ui.restoreHint', 'Pay to restore service. It switches back on straight away.');
+            else if (S.lateFee && S.lateFee.enabled && !S.lateFee.applied) sub = L('ui.lateFeeHint', 'A late fee is added if this is not paid in time.');
+            h += dueCard(sub);
+        }
+        if (pre) h += creditCard();
+
+        if (S.plan.type === 'payg') {
+            h += '<div class="list">' +
+                '<div class="li"><span>' + L('ui.minutes', 'Minutes') + '</span><span class="mut num">' + Math.round(S.minutesUsed) + '</span></div>' +
+                '<div class="li"><span>' + L('ui.texts', 'Texts') + '</span><span class="mut num">' + Math.round(S.textsUsed) + '</span></div>' +
+                '<div class="li"><span>' + L('ui.data', 'Data') + '</span><span class="mut num">' + mbText(S.dataMBUsed) + '</span></div></div>';
+            h += '<div class="hint">' + L('ui.paygHint', 'Calls, texts and data are taken from your credit at your plan rates.') + '</div>';
+        } else {
+            var dataInc = S.plan.dataMB < 0 ? -1 : S.plan.dataMB + (S.extraDataMB || 0);
+            h += '<div class="rings">' +
+                ring(S.minutesUsed, S.plan.minutes, L('ui.minutes', 'Minutes'), 'var(--blue)', 'i-phone', false) +
+                ring(S.textsUsed, S.plan.texts, L('ui.texts', 'Texts'), 'var(--green)', 'i-msg', false) +
+                ring(S.dataMBUsed, dataInc, L('ui.data', 'Data'), 'var(--orange)', 'i-data', true) + '</div>';
+        }
+        if (S.extraDataMB > 0) h += '<div class="hint">' + L('ui.addonActive', 'Includes %s of add-on data.', mbText(S.extraDataMB)) + '</div>';
+        if ((S.plan.type === 'payg' || S.plan.dataMB >= 0) && S.addons && S.addons.length && !S.paused && S.status !== 'suspended') {
+            h += '<div class="add-row"><button class="btn ghost" data-act="addonOpen">' + icon('i-plus') + ' ' + L('ui.addData', 'Add data') + '</button></div>';
+        }
+
+        h += '<div class="list">';
+        if (S.plan.type === 'postpaid') h += '<div class="li"><span>' + L('ui.estimated', 'Estimated this cycle') + '</span><span class="mut num">' + fmt(S.estimatedThisCycle) + '</span></div>';
+        if (S.lockedUntil && !(S.contract && S.contract.cyclesLeft)) h += '<div class="li"><span>' + L('ui.lockedUntil', 'Plan locked until') + '</span><span class="mut">' + day(S.lockedUntil) + '</span></div>';
+        if (S.contract && S.contract.cyclesLeft) {
+            h += '<div class="li"><div class="l2">' + L('ui.contractUntil', 'Contract until') + '<small>' + L('ui.contractLeft', '%s cycle(s) to go', S.contract.cyclesLeft) + '</small></div><span class="mut">' + day(S.contract.endsAt) + '</span></div>';
+        }
+        if (S.plan.type === 'bundle') {
+            h += '<div class="li"><div class="l2">' + L('ui.autoRenew', 'Auto-renew') + '<small>' +
+                (S.autoPay ? L('ui.autoRenewOn', 'Renews from your credit on %s', day(S.dueAt)) : L('ui.autoRenewOff', 'Off · it stops when it ends')) + '</small></div>' +
+                '<button class="tog' + (S.autoPay ? ' on' : '') + '" data-act="autopay" aria-label="' + L('ui.autoRenew', 'Auto-renew') + '"></button></div>';
+        } else if (S.plan.type === 'postpaid') {
+            h += '<div class="li"><div class="l2">' + L('ui.autoPay', 'Auto-pay') + '<small>' +
                 (S.autoPay ? L('ui.autoPayOn', 'Charged to your bank on %s', day(S.dueAt)) : L('ui.autoPayOff', 'Off · pay by hand')) + '</small></div>' +
-            '<button class="tog' + (S.autoPay ? ' on' : '') + '" data-act="autopay" aria-label="' + L('ui.autoPay', 'Auto-pay') + '"></button></div></div>';
+                '<button class="tog' + (S.autoPay ? ' on' : '') + '" data-act="autopay" aria-label="' + L('ui.autoPay', 'Auto-pay') + '"></button></div>';
+        }
+        h += '</div>';
         h += '<div class="hint">' + L('ui.dataHint', 'Data usage is an estimate based on time spent on mobile data, not exact bytes.') + '</div>';
         h += '</div>';
         return h;
     }
 
     function viewPlans() {
-        var sub = S.planLock
-            ? L('ui.planSubLocked', 'Your plan is locked until %s. You can queue a switch for your next bill.', day(S.lockedUntil))
-            : L('ui.planSubFree', 'Switch any time. Changes start straight away.');
+        var pre = isPrepaid(S.plan);
+        var sub = pre ? L('ui.planSubPrepaid', 'Prepaid plans can be changed any time. Changes start straight away.')
+            : (S.planLock
+                ? L('ui.planSubLocked', 'Your plan is locked until %s. You can queue a switch for your next bill.', day(S.lockedUntil))
+                : L('ui.planSubFree', 'Switch any time. Changes start straight away.'));
         var h = '<div class="safe-top"></div><div class="ttl">' + L('ui.plansTitle', 'Plans') + '</div><div class="sub">' + sub + '</div><div class="scroll" id="scroll" style="padding-top:14px">';
         S.plans.forEach(function (p) {
             var isCur = p.id === S.plan.id;
@@ -426,51 +653,183 @@
             var tags = '';
             if (isCur) tags += '<span class="tag cur">' + L('ui.current', 'Current') + '</span>';
             else if (isNext) tags += '<span class="tag next">' + L('ui.nextBillTag', 'Next bill') + '</span>';
-            else if (p.popular) tags += '<span class="tag pop">' + L('ui.popular', 'Popular') + '</span>';
             var action = '';
             if (isNext) action = '<span class="go grey" data-act="cancelPending" role="button">' + L('ui.cancelSwitch', 'Cancel switch') + '</span>';
-            else if (!isCur) action = '<span class="go">' + (S.planLock ? L('ui.switchOn', 'Switch on %s', day(S.lockedUntil)) : L('ui.switchTo', 'Switch to %s', p.label)) + '</span>';
-            h += '<button class="plan' + (isCur ? ' cur' : '') + (isNext ? ' next' : '') + '" ' + (isCur || isNext ? '' : 'data-act="pick" data-plan="' + esc(p.id) + '"') + '>' +
-                '<div class="h"><div><b>' + esc(p.label) + '</b>' + tags + '</div><div class="p num">' + fmtPrice(p.price) + '<small>' + L('ui.perCycleShort', '/cycle') + '</small></div></div>' +
-                features(p) + ((isCur || isNext) ? overage(p) : '') + action + '</button>';
+            else if (isCur && p.type === 'bundle' && (S.status === 'expired' || S.blocked === 'expired' || S.blocked === 'no_credit')) action = '<span class="go">' + L('ui.buyAgain', 'Buy again') + '</span>';
+            else if (!isCur) {
+                var label;
+                if (isPrepaid(S.plan) || !S.planLock || !S.lockedUntil) label = L('ui.switchTo', 'Switch to %s', p.label);
+                else label = L('ui.switchOn', 'Switch on %s', day(S.lockedUntil));
+                action = '<span class="go">' + label + '</span>';
+            }
+            var clickable = !(isCur && !(p.type === 'bundle' && (S.status === 'expired' || S.blocked === 'expired' || S.blocked === 'no_credit'))) && !isNext;
+            h += planCard(p, { cls: (isCur ? ' cur' : '') + (isNext ? ' next' : ''), tags: tags, noPopular: isCur, noClick: !clickable, action: action,
+                showOv: isCur || isNext || isPrepaid(p) });
         });
+
+        // manage
+        h += '<div class="cap">' + L('ui.manage', 'Manage') + '</div><div class="list" style="margin-top:0">';
+        if (S.paused) {
+            h += '<button class="row-btn" data-act="resume"><span>' + L('ui.resumeNow', 'Resume now') + '<small>' + L('ui.pausedUntil', 'Paused until %s', day(S.paused.untilAt)) + '</small></span>' + icon('i-chev') + '</button>';
+        } else if (S.plan.type === 'postpaid' && S.pauseCfg && S.pauseCfg.enabled) {
+            var canPause = S.balanceDue <= 0 && S.status === 'current' && !(S.contract && S.contract.cyclesLeft && !S.pauseCfg.allowedInContract);
+            h += '<button class="row-btn" ' + (canPause ? 'data-act="pauseOpen"' : 'disabled') + '><span>' + L('ui.pauseService', 'Pause service') +
+                '<small>' + (canPause ? L('ui.pauseSub', 'Switch off and stop billing for up to %s days', S.pauseCfg.maxDays)
+                    : (S.balanceDue > 0 ? L('ui.pauseOwing', 'Pay your bill first') : L('ui.pauseContract', 'Not available during a contract'))) + '</small></span>' + icon('i-chev') + '</button>';
+        }
+        if (S.addons && S.addons.length && (S.plan.type === 'payg' || S.plan.dataMB >= 0)) {
+            h += '<button class="row-btn" data-act="addonOpen"><span>' + L('ui.addData', 'Add data') + '<small>' + L('ui.addDataSub', 'Extra data for this cycle') + '</small></span>' + icon('i-chev') + '</button>';
+        }
+        if (isPrepaid(S.plan) || S.credit > 0) {
+            h += '<button class="row-btn" data-act="topupOpen"><span>' + L('ui.topUp', 'Top up') + '<small>' + L('ui.creditNow', 'Credit: %s', raw(fmt(S.credit))) + '</small></span>' + icon('i-chev') + '</button>';
+        }
+        if (!S.pendingCancel) {
+            h += '<button class="row-btn red" data-act="cancelOpen"><span>' + L('ui.cancelService', 'Cancel service') + '</span>' + icon('i-chev') + '</button>';
+        }
+        h += '</div>';
         h += '</div>';
         return h;
     }
 
+    // ---- usage ----
+    function niceMax(v) {
+        if (v <= 0) return 1;
+        var p = Math.pow(10, Math.floor(Math.log(v) / Math.LN10));
+        var n = v / p;
+        var step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+        return step * p;
+    }
+    function unitText(v) { return metric === 'data' ? mbText(v) : String(Math.round(v)); }
+
+    function viewUsage() {
+        var n = S.usageDays || 14;
+        var today = Math.floor(S.now / 86400);
+        var cycleDay = Math.floor(S.cycleStart / 86400);
+        var byDay = {};
+        (S.daily || []).forEach(function (r) { byDay[r.day] = r; });
+        var vals = [], total = 0, peak = 0;
+        for (var i = n - 1; i >= 0; i--) {
+            var d = today - i, r = byDay[d];
+            var v = r ? (metric === 'data' ? r.d : metric === 'minutes' ? r.m : r.t) : 0;
+            vals.push({ day: d, v: v });
+            total += v;
+            if (v > peak) peak = v;
+        }
+        var top = niceMax(peak);
+        var bars = '';
+        vals.forEach(function (x) {
+            var pct = x.v > 0 ? Math.max(3, (x.v / top) * 100) : 3;
+            var cls = (x.v <= 0 ? 'zero ' : '') + (x.day < cycleDay ? 'old ' : '') + (x.day === today ? 'today' : '');
+            bars += '<div class="bar-c" title="' + esc(day(x.day * 86400 + 43200) + ': ' + unitText(x.v)) + '"><i class="' + cls + '" style="height:' + pct.toFixed(1) + '%"></i></div>';
+        });
+        var mid = vals[Math.floor(vals.length / 2)];
+        var used = metric === 'data' ? S.dataMBUsed : metric === 'minutes' ? S.minutesUsed : S.textsUsed;
+        var dataInc = S.plan && S.plan.dataMB < 0 ? -1 : (S.plan ? S.plan.dataMB + (S.extraDataMB || 0) : 0);
+        var inc = metric === 'data' ? dataInc : metric === 'minutes' ? (S.plan ? S.plan.minutes : 0) : (S.plan ? S.plan.texts : 0);
+
+        var h = '<div class="safe-top"></div><div class="ttl">' + L('ui.usageTitle', 'Usage') + '</div><div class="scroll" id="scroll" style="padding-top:12px">';
+        h += '<div class="seg">' +
+            ['data', 'minutes', 'texts'].map(function (m) {
+                var lab = m === 'data' ? L('ui.data', 'Data') : m === 'minutes' ? L('ui.minutes', 'Minutes') : L('ui.texts', 'Texts');
+                return '<button class="' + (metric === m ? 'on' : '') + '" data-act="metric" data-metric="' + m + '">' + lab + '</button>';
+            }).join('') + '</div>';
+        h += '<div class="chart"><div class="top"><b class="num">' + unitText(total) + '</b><span>' + L('ui.lastDays', 'Last %s days', n) + '</span></div>' +
+            '<div class="bars">' + bars + '</div>' +
+            '<div class="axis"><span>' + day(vals[0].day * 86400 + 43200) + '</span><span>' + day(mid.day * 86400 + 43200) + '</span><span>' + L('ui.today', 'Today') + '</span></div></div>';
+        var todayV = vals[vals.length - 1].v;
+        h += '<div class="stats">' +
+            '<div class="stat"><b class="num">' + unitText(todayV) + '</b><small>' + L('ui.today', 'Today') + '</small></div>' +
+            '<div class="stat"><b class="num">' + unitText(total / n) + '</b><small>' + L('ui.dailyAvg', 'Daily average') + '</small></div>' +
+            '<div class="stat"><b class="num">' + unitText(peak) + '</b><small>' + L('ui.busiest', 'Busiest day') + '</small></div></div>';
+        var cycleLine = inc < 0 ? L('ui.usedUnlimited', '%s used this cycle · unlimited', unitText(used))
+            : L('ui.usedOf', '%s of %s used this cycle', unitText(used), unitText(inc));
+        if (S.plan && S.plan.type === 'payg') cycleLine = L('ui.usedThisCycle', '%s used this cycle', unitText(used));
+        h += '<div class="legend">' + cycleLine + '<br>' + L('ui.chartKey', 'Lighter bars are from before your current cycle started.') + '</div>';
+        if (metric === 'data') h += '<div class="hint">' + L('ui.dataHint', 'Data usage is an estimate based on time spent on mobile data, not exact bytes.') + '</div>';
+        h += '</div>';
+        return h;
+    }
+
+    // ---- bills and receipts ----
     function billRange(h) {
         return day(h.cycleStart) + ' – ' + day(h.cycleStart + S.cycleDays * 86400 - 1);
     }
+    function entryName(h) {
+        if (h.kind === 'bill') return billRange(h);
+        return day(h.at || h.cycleStart);
+    }
+    function entryLabel(h) {
+        if (h.kind === 'bill') { var p = planById(h.planId); return p ? p.label : (h.label || h.planId); }
+        if (h.kind === 'topup') return L('ui.topUpLabel', 'Top up');
+        return h.label || '';
+    }
+    function entryIcon(h) {
+        if (h.kind === 'topup' || h.kind === 'adjust') return { ico: 'i-plus', cls: ' b' };
+        if (h.kind === 'addon') return { ico: 'i-data', cls: ' b' };
+        if (h.kind === 'bundle') return { ico: 'i-plan', cls: ' b' };
+        if (h.kind === 'fee') return { ico: h.paid ? 'i-check' : 'i-warn', cls: h.paid ? ' o' : ' u' };
+        return { ico: h.paid ? 'i-check' : 'i-warn', cls: h.paid ? '' : ' u' };
+    }
+    // The lines on a bill: the saved ones, or (for bills from before line items existed) the plan and the extras.
+    function entryItems(h) {
+        if (h.items && h.items.length) return h.items;
+        var p = planById(h.planId);
+        var base = p ? Math.min(p.price, h.amount) : h.amount;
+        var out = [{ k: 'plan', label: p ? p.label : h.planId, amount: base }];
+        if (h.amount - base > 0.004) out.push({ k: 'extras', amount: h.amount - base });
+        return out;
+    }
+    function itemText(it, h) {
+        if (it.k === 'plan') return L('ui.planLine', '%s plan', it.label || '');
+        if (it.k === 'minutes') return L('ui.itemMinutes', 'Extra minutes (%s)', Math.round(it.qty));
+        if (it.k === 'texts') return L('ui.itemTexts', 'Extra texts (%s)', Math.round(it.qty));
+        if (it.k === 'data') return L('ui.itemData', 'Extra data (%s)', raw(esc(mbText(it.qty))));
+        if (it.k === 'extras') return L('ui.extras', 'Extra minutes, texts, data');
+        if (it.k === 'topup') return L('ui.topUpLabel', 'Top up');
+        return esc(it.label || '');
+    }
 
     function viewBills() {
-        var extras = Math.max(0, S.estimatedThisCycle - S.plan.price);
         var h = '<div class="safe-top"></div><div class="ttl">' + L('ui.billsTitle', 'Bills') + '</div><div class="scroll" id="scroll" style="padding-top:12px">';
         if (S.balanceDue > 0) h += dueCard(S.status === 'suspended' ? L('ui.dueSuspendedSub', 'Service is suspended until this is paid.') : '') + '<div style="height:12px"></div>';
-        h += '<div class="sum"><div class="lbl">' + L('ui.cycleSoFar', 'This cycle so far') + '</div><div class="big num">' + fmt(S.estimatedThisCycle) + '</div>' +
-            '<div class="split">' +
-            '<div><span>' + L('ui.planLine', '%s plan', S.plan.label) + '</span><span class="num">' + fmt(S.plan.price) + '</span></div>' +
-            '<div' + (extras <= 0 ? ' class="z"' : '') + '><span>' + L('ui.extras', 'Extra minutes, texts, data') + '</span><span class="num">' + fmt(extras) + '</span></div>' +
-            '<div><span>' + L('ui.billDate', 'Bill date') + '</span><span>' + day(S.dueAt) + '</span></div></div></div>';
-        h += '<div class="cap">' + L('ui.pastBills', 'Past bills') + '</div>';
+        if (S.plan.type === 'postpaid') {
+            var extras = Math.max(0, S.estimatedThisCycle - S.plan.price);
+            h += '<div class="sum"><div class="lbl">' + L('ui.cycleSoFar', 'This cycle so far') + '</div><div class="big num">' + fmt(S.estimatedThisCycle) + '</div>' +
+                '<div class="split">';
+            (S.estimateItems || []).forEach(function (it) {
+                h += '<div' + (it.amount < 0 ? ' class="z"' : '') + '><span>' + itemText(it) + '</span><span class="num">' + fmt(it.amount) + '</span></div>';
+            });
+            if (extras <= 0 && !(S.estimateItems && S.estimateItems.some(function (i) { return i.k !== 'plan' && i.k !== 'promo'; }))) {
+                h += '<div class="z"><span>' + L('ui.extras', 'Extra minutes, texts, data') + '</span><span class="num">' + fmt(0) + '</span></div>';
+            }
+            h += '<div><span>' + L('ui.billDate', 'Bill date') + '</span><span>' + day(S.dueAt) + '</span></div></div></div>';
+        } else {
+            h += '<div class="sum"><div class="lbl">' + L('ui.credit', 'Credit') + '</div><div class="big num">' + fmt(S.credit) + '</div>' +
+                '<div class="split"><div><span>' + L('ui.noBillsPrepaid', 'Prepaid: you never get a bill') + '</span><span></span></div></div></div>';
+        }
+        h += '<div class="cap">' + L('ui.activity', 'Activity') + '</div>';
         if (!S.history || !S.history.length) {
-            h += '<div class="list" style="margin-top:0"><div class="none">' + L('ui.noBills', 'No bills yet. Your first one arrives on %s.', day(S.dueAt)) + '</div></div>';
+            h += '<div class="list" style="margin-top:0"><div class="none">' + (S.plan.type === 'postpaid'
+                ? L('ui.noBills', 'No bills yet. Your first one arrives on %s.', day(S.dueAt))
+                : L('ui.noActivity', 'Nothing here yet.')) + '</div></div>';
         } else {
             h += '<div class="list" style="margin-top:0">';
             S.history.forEach(function (b) {
-                var p = planById(b.planId);
-                var base = p ? p.price : 0;
-                var extra = Math.max(0, b.amount - base);
                 var open = openBill === b.id;
-                var name = p ? p.label : b.planId;
+                var ic = entryIcon(b);
+                var sign = (b.kind === 'topup' || b.kind === 'adjust') ? '+' : '';
                 h += '<button class="bill" data-act="bill" data-id="' + esc(b.id) + '">' +
-                    '<div class="ico' + (b.paid ? '' : ' u') + '">' + icon(b.paid ? 'i-check' : 'i-warn') + '</div>' +
-                    '<div class="m">' + billRange(b) + '<small>' + esc(name) + '</small></div>' +
-                    '<div class="r num">' + fmt(b.amount) + (b.paid
+                    '<div class="ico' + ic.cls + '">' + icon(ic.ico) + '</div>' +
+                    '<div class="m">' + entryName(b) + '<small>' + esc(entryLabel(b)) + '</small></div>' +
+                    '<div class="r num">' + sign + fmt(b.amount) + (b.paid
                         ? '<small>' + (b.paidAt ? L('ui.paidOn', 'Paid %s', day(b.paidAt)) : L('ui.paid', 'Paid')) + '</small>'
                         : '<small class="u">' + L('ui.unpaid', 'Unpaid') + '</small>') + '</div>';
                 if (open) {
-                    h += '<div class="det num"><div><span>' + L('ui.planLine', '%s plan', name) + '</span><span>' + fmt(Math.min(base, b.amount)) + '</span></div>' +
-                        (extra > 0 ? '<div><span>' + L('ui.extras', 'Extra minutes, texts, data') + '</span><span>' + fmt(extra) + '</span></div>' : '') + '</div>';
+                    h += '<div class="det num">';
+                    entryItems(b).forEach(function (it) {
+                        h += '<div' + (it.amount < 0 ? ' class="disc"' : '') + '><span>' + itemText(it, b) + '</span><span>' + fmt(it.amount) + '</span></div>';
+                    });
+                    h += '</div><span class="rcp" data-act="receipt" data-id="' + esc(b.id) + '" role="button">' + L('ui.viewReceipt', 'View receipt') + '</span>';
                 }
                 h += '</button>';
             });
@@ -480,33 +839,201 @@
         return h;
     }
 
-    function viewSheet() {
-        if (!sheet) return '';
+    function historyById(id) {
+        for (var i = 0; i < (S.history || []).length; i++) if (S.history[i].id === id) return S.history[i];
+        return null;
+    }
+    function padLine(a, b, w) {
+        a = String(a); b = String(b);
+        var gap = Math.max(1, w - a.length - b.length);
+        return a + new Array(gap + 1).join(' ') + b;
+    }
+    function receiptText(h) {
+        var W = 34, rule = new Array(W + 1).join('-');
+        var lines = ['AERO MOBILE', L2('ui.receipt', 'Receipt') + ' #' + String(h.id).toUpperCase(),
+            L2('ui.date', 'Date') + ': ' + day(h.at || h.cycleStart), rule];
+        if (h.kind === 'bill') lines.push(L2('ui.period', 'Period') + ': ' + billRange(h));
+        lines.push(L2('ui.planWord', 'Plan') + ': ' + entryLabel(h), rule);
+        entryItems(h).forEach(function (it) { lines.push(padLine(plain(itemText(it, h)), fmt(it.amount), W)); });
+        lines.push(rule, padLine(L2('ui.total', 'TOTAL'), fmt(h.amount), W), '',
+            h.paid ? (L2('ui.paid', 'Paid') + (h.paidAt ? ' ' + day(h.paidAt) : '')) : L2('ui.unpaid', 'Unpaid'));
+        return lines.join('\n');
+    }
+    function L2(key, def) { return plain(L(key, def)); }
+
+    function copyText(text) {
+        try {
+            var ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) return true;
+        } catch (e) {}
+        try { if (navigator.clipboard) { navigator.clipboard.writeText(text); return true; } } catch (e2) {}
+        return false;
+    }
+    function saveText(name, text) {
+        try {
+            var blob = new Blob([text], { type: 'text/plain' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = name;
+            document.body.appendChild(a); a.click();
+            setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 500);
+            return true;
+        } catch (e) { return false; }
+    }
+
+    // ---- sheets ----
+    function sheetShell(inner) {
+        return '<div class="dim" data-act="closeSheet"></div><div class="sheet"><div class="grab"></div>' + inner +
+            '<button class="cancel" data-act="closeSheet">' + L('ui.cancel', 'Cancel') + '</button></div>';
+    }
+    function confirmBtn(text, extra) {
+        return '<button class="btn blue full" data-act="' + (extra || 'confirm') + '"' + (busy ? ' disabled' : '') + '>' + text + '</button>';
+    }
+
+    // How a plan change will happen: 'start' (first plan), 'now' (starts straight away), 'queue' (next bill), 'exit' (pay the fee, now)
+    function planMode(p) {
+        if (!S.chosen) return { mode: 'start', fee: 0 };
+        if (isPrepaid(S.plan)) return { mode: 'now', fee: 0 };
+        var fee = S.contract ? S.contract.exitFee : 0;
+        var upgrade = !isPrepaid(p) && p.price > S.plan.price && S.contract && S.contract.upgradesFree;
+        if (fee > 0 && !upgrade) return { mode: 'exit', fee: fee };
+        return { mode: S.planLock ? 'queue' : 'now', fee: 0 };
+    }
+    function bundleCost(p) {
+        var o = offerFor(p);
+        return o ? o.firstPrice : p.price;
+    }
+
+    function viewPlanSheet() {
         var p = planById(sheet.planId);
         if (!p) return '';
-        var per = L('ui.perCycleFull', '%s / cycle', raw(fmtPrice(p.price)));
-        var h = '<div class="dim" data-act="closeSheet"></div><div class="sheet"><div class="grab"></div>';
-        if (sheet.kind === 'start') {
-            h += '<h3>' + L('ui.startTitle', 'Start %s?', p.label) + '</h3>' +
-                '<p>' + (S.planLock
-                    ? L('ui.startBodyLock', "Your plan starts now and runs for %s days. It's locked for that time, but you can queue a change for your next bill.", S.cycleDays)
-                    : L('ui.startBodyFree', 'Your plan starts now. You can change it whenever you like.')) + '</p>' +
-                '<div class="cmp"><div class="n"><b>' + esc(p.label) + '</b><small class="num">' + per + '</small></div></div>' +
-                '<button class="btn blue full" data-act="confirm"' + (busy ? ' disabled' : '') + '>' + L('ui.startBtn', 'Start plan') + '</button>';
+        var pm = planMode(p);
+        var mode = pm.mode;
+        var per = p.type === 'payg' ? L('ui.payg', 'Pay as you go')
+            : (p.type === 'bundle' ? L('ui.priceDays', '%s / %s days', raw(fmtPrice(p.price)), p.durationDays) : L('ui.perCycleFull', '%s / cycle', raw(fmtPrice(p.price))));
+        var h = '', body = '', btn;
+        var cost = p.type === 'bundle' ? bundleCost(p) : 0;
+        var short = p.type === 'bundle' && mode !== 'queue' && S.credit < cost;
+
+        if (mode === 'start') {
+            h = L('ui.startTitle', 'Start %s?', p.label);
+            if (p.type === 'payg') body = L('ui.startBodyPayg', 'Calls, texts and data come out of your credit. Top up whenever you like.');
+            else if (p.type === 'bundle') body = L('ui.startBodyBundle', 'You buy it now from your credit and it runs for %s days.', p.durationDays);
+            else body = S.planLock
+                ? L('ui.startBodyLock', "Your plan starts now and runs for %s days. It's locked for that time, but you can queue a change for your next bill.", S.cycleDays)
+                : L('ui.startBodyFree', 'Your plan starts now. You can change it whenever you like.');
+            btn = confirmBtn(L('ui.startBtn', 'Start plan'));
+        } else if (mode === 'exit') {
+            h = L('ui.exitTitle', 'Leave your contract?');
+            body = L('ui.exitBody', 'Leaving early costs %s. Your current cycle is billed now and %s starts straight away.', raw(fmt(pm.fee)), p.label);
+            btn = confirmBtn(L('ui.exitBtn', 'Pay %s and switch', raw(fmt(pm.fee))));
+        } else if (mode === 'queue') {
+            h = L('ui.switchTitleLocked', 'Switch to %s on %s?', p.label, day(S.lockedUntil));
+            body = L('ui.switchBodyLocked', 'You stay on %s until then, and your next bill is still for %s. You can cancel the switch before it starts.', S.plan.label, S.plan.label);
+            if (p.type === 'bundle') body += ' ' + L('ui.bundleLater', 'The bundle is bought from your credit when the switch happens.');
+            btn = confirmBtn(L('ui.queueBtn', 'Queue switch'));
         } else {
-            var c = S.plan;
-            var locked = S.planLock;
-            h += '<h3>' + (locked ? L('ui.switchTitleLocked', 'Switch to %s on %s?', p.label, day(S.lockedUntil)) : L('ui.switchTitle', 'Switch to %s?', p.label)) + '</h3>' +
-                '<p>' + (locked
-                    ? L('ui.switchBodyLocked', 'You stay on %s until then, and your next bill is still for %s. You can cancel the switch before it starts.', c.label, c.label)
-                    : L('ui.switchBodyNow', 'The change starts straight away.')) + '</p>' +
-                '<div class="cmp"><div><b>' + esc(c.label) + '</b><small class="num">' + L('ui.perCycleFull', '%s / cycle', raw(fmtPrice(c.price))) + '</small></div>' +
-                '<div class="ar">' + icon('i-arrow') + '</div>' +
-                '<div class="n"><b>' + esc(p.label) + '</b><small class="num">' + per + '</small></div></div>' +
-                '<button class="btn blue full" data-act="confirm"' + (busy ? ' disabled' : '') + '>' + (locked ? L('ui.queueBtn', 'Queue switch') : L('ui.switchBtn', 'Switch plan')) + '</button>';
+            h = L('ui.switchTitle', 'Switch to %s?', p.label);
+            body = L('ui.switchBodyNow', 'The change starts straight away.');
+            if (isPrepaid(S.plan) && S.plan.type === 'bundle') body += ' ' + L('ui.forfeit', 'Anything left in your current bundle is lost.');
+            btn = confirmBtn(L('ui.switchBtn', 'Switch plan'));
         }
-        h += '<button class="cancel" data-act="closeSheet">' + L('ui.cancel', 'Cancel') + '</button></div>';
-        return h;
+
+        var out = '<h3>' + h + '</h3><p>' + body + '</p>';
+        out += '<div class="cmp">' + (S.chosen ? '<div><b>' + esc(S.plan.label) + '</b><small class="num">' + (isPrepaid(S.plan) ? L('ui.creditNow', 'Credit: %s', raw(fmt(S.credit))) : L('ui.perCycleFull', '%s / cycle', raw(fmtPrice(S.plan.price)))) + '</small></div><div class="ar">' + icon('i-arrow') + '</div>' : '') +
+            '<div class="n"><b>' + esc(p.label) + '</b><small class="num">' + per + '</small></div></div>';
+        var o = offerFor(p);
+        if (o) out += '<p style="color:#22a848;margin:-4px 0 10px">' + icon('i-gift') + ' ' + esc(o.label) + '</p>';
+        if (p.contractCycles > 0 && mode !== 'queue') out += '<p class="warn">' + L('ui.contractWarn', 'This is a %s-cycle contract. Leaving early costs a fee.', p.contractCycles) + '</p>';
+        if (p.type === 'bundle' && mode !== 'queue') {
+            out += '<p' + (short ? ' class="warn"' : '') + '>' + L('ui.bundleCost', 'Costs %s from your credit. You have %s.', raw(fmt(cost)), raw(fmt(S.credit))) + '</p>';
+        }
+        if (mode === 'start' || mode === 'now') {
+            if (p.price > 0 || p.type === 'bundle') {
+                out += '<div class="codebox"><label for="code">' + L('ui.promoCode', 'Promo code (optional)') + '</label>' +
+                    '<input class="field" id="code" maxlength="32" autocomplete="off" value="' + esc(promoCode) + '"></div>';
+            }
+        }
+        out += short ? '<button class="btn blue full" style="margin-top:16px" data-act="topupOpen">' + L('ui.topUpFirst', 'Top up first') + '</button>' : '<div style="height:16px"></div>' + btn;
+        return sheetShell(out);
+    }
+
+    function viewTopupSheet() {
+        var t = S.topUp || {};
+        var out = '<h3>' + L('ui.topUp', 'Top up') + '</h3><p>' + L('ui.topUpBody', 'Add credit from your bank account. Credit is used for calls, texts and data past your allowance, and for bundles.') + '</p>';
+        out += '<div class="chips">' + (t.presets || []).map(function (a) {
+            return '<button class="chip' + (String(topupAmount) === String(a) ? ' on' : '') + '" data-act="topupPreset" data-amount="' + a + '">' + fmtPrice(a) + '</button>';
+        }).join('') + '</div>';
+        out += '<input class="field" id="topupAmt" inputmode="decimal" placeholder="' + esc(L('ui.otherAmount', 'Other amount')) + '" value="' + esc(topupAmount) + '">';
+        out += '<div class="fine">' + L('ui.topUpRange', 'Between %s and %s', raw(fmtPrice(t.min || 0)), raw(fmtPrice(t.max || 0))) + '</div>';
+        var amt = parseFloat(topupAmount);
+        out += '<div style="height:12px"></div>' + confirmBtn(amt > 0 ? L('ui.topUpBtn', 'Top up %s', raw(fmt(amt))) : L('ui.topUp', 'Top up'), 'topupConfirm');
+        return sheetShell(out);
+    }
+
+    function viewAddonSheet() {
+        var pre = isPrepaid(S.plan);
+        var out = '<h3>' + L('ui.addData', 'Add data') + '</h3><p>' + L('ui.addonBody', 'Extra data for this cycle only. %s', raw(esc(pre
+            ? L2('ui.addonFromCredit', 'It comes out of your credit.') : L2('ui.addonFromBank', 'It is charged to your bank now.')))) + '</p>';
+        (S.addons || []).forEach(function (a) {
+            var cant = pre && S.credit < a.price;
+            out += '<button class="opt" data-act="addonBuy" data-id="' + esc(a.id) + '"' + (busy || cant ? ' disabled' : '') + '><span><b>' + esc(a.label) + '</b><small>' + mbText(a.dataMB) + '</small></span><span class="pr num">' + fmtPrice(a.price) + '</span></button>';
+        });
+        if (pre) out += '<div class="fine">' + L('ui.creditNow', 'Credit: %s', raw(fmt(S.credit))) + '</div>';
+        return sheetShell(out);
+    }
+
+    function viewPauseSheet() {
+        var cfg = S.pauseCfg || {};
+        var max = cfg.maxDays || 28;
+        var presets = [7, 14, max].filter(function (v, i, a) { return v <= max && a.indexOf(v) === i; });
+        var out = '<h3>' + L('ui.pauseService', 'Pause service') + '</h3><p>' + L('ui.pauseBody', 'Calls, texts and data switch off and you are not billed. Your cycle picks up where it stopped. Emergency numbers still work.') + '</p>';
+        out += '<div class="chips">' + presets.map(function (d) {
+            return '<button class="chip' + (String(pauseDays) === String(d) ? ' on' : '') + '" data-act="pauseDays" data-days="' + d + '">' + L('ui.nDays', '%s days', d) + '</button>';
+        }).join('') + '</div>';
+        out += '<input class="field" id="pauseIn" inputmode="numeric" placeholder="' + esc(L('ui.daysUpTo', 'Days (up to %s)', max)) + '" value="' + esc(pauseDays) + '">';
+        if (cfg.fee > 0) out += '<div class="fine">' + L('ui.pauseFee', 'Pausing costs %s.', raw(fmt(cfg.fee))) + '</div>';
+        out += '<div style="height:12px"></div>' + confirmBtn(L('ui.pauseBtn', 'Pause'), 'pauseConfirm');
+        return sheetShell(out);
+    }
+
+    function viewCancelSheet() {
+        var fee = S.contract ? S.contract.exitFee : 0;
+        var pre = isPrepaid(S.plan);
+        var body;
+        if (pre) body = L('ui.cancelBodyPrepaid', 'Your plan stops now. Any credit stays on this SIM.');
+        else if (fee > 0) body = L('ui.cancelBodyFee', 'Leaving your contract early costs %s. Your current cycle is billed now and service stops.', raw(fmt(fee)));
+        else if (S.planLock) body = L('ui.cancelBodyLocked', 'Your plan ends on %s. You keep your service until then.', day(S.dueAt));
+        else body = L('ui.cancelBodyNow', 'Your plan stops now and the cycle so far is billed.');
+        var out = '<h3>' + L('ui.cancelTitle', 'Cancel service?') + '</h3><p>' + body + '</p>' +
+            '<div style="height:16px"></div><button class="btn full" style="background:var(--red);color:#fff" data-act="cancelConfirm"' + (busy ? ' disabled' : '') + '>' +
+            (fee > 0 ? L('ui.cancelFeeBtn', 'Pay %s and cancel', raw(fmt(fee))) : L('ui.cancelBtn', 'Cancel service')) + '</button>';
+        return sheetShell(out);
+    }
+
+    function viewReceiptSheet() {
+        var b = historyById(sheet.id);
+        if (!b) return '';
+        return '<div class="dim" data-act="closeSheet"></div><div class="sheet"><div class="grab"></div><h3>' + L('ui.receipt', 'Receipt') + '</h3>' +
+            '<div class="receipt">' + esc(receiptText(b)) + '</div>' +
+            '<div class="two"><button class="btn ghost" data-act="copyReceipt" data-id="' + esc(b.id) + '">' + L('ui.copy', 'Copy') + '</button>' +
+            '<button class="btn blue" data-act="saveReceipt" data-id="' + esc(b.id) + '">' + L('ui.download', 'Download') + '</button></div>' +
+            '<div class="fine">' + L('ui.receiptHint', 'If nothing downloads, use Copy and paste it into a note.') + '</div>' +
+            '<button class="cancel" data-act="closeSheet">' + L('ui.close', 'Close') + '</button></div>';
+    }
+
+    function viewSheet() {
+        if (!sheet) return '';
+        if (sheet.kind === 'plan') return viewPlanSheet();
+        if (sheet.kind === 'topup') return viewTopupSheet();
+        if (sheet.kind === 'addon') return viewAddonSheet();
+        if (sheet.kind === 'pause') return viewPauseSheet();
+        if (sheet.kind === 'cancel') return viewCancelSheet();
+        if (sheet.kind === 'receipt') return viewReceiptSheet();
+        return '';
     }
 
     function viewTabs() {
@@ -514,6 +1041,7 @@
             return '<button class="' + (tab === id ? 'on' : '') + '" data-act="tab" data-tab="' + id + '">' + icon(ico) + label + (badge ? '<span class="badge"></span>' : '') + '</button>';
         }
         return '<div class="tabs">' + t('overview', L('ui.tabOverview', 'Overview'), 'i-home') + t('plans', L('ui.tabPlans', 'Plans'), 'i-plan') +
+            t('usage', L('ui.tabUsage', 'Usage'), 'i-chart') +
             t('bills', L('ui.tabBills', 'Bills'), 'i-bill', S.balanceDue > 0) + '</div>';
     }
 
@@ -522,17 +1050,24 @@
         var col = document.getElementById('col');
         var sc = document.getElementById('scroll');
         var top = sc ? sc.scrollTop : 0;
+        // keep the cursor in a text box when the page redraws (e.g. a usage update while typing)
+        var ae = document.activeElement, aeId = ae && ae.id, aeStart = null;
+        if (aeId) { try { aeStart = ae.selectionStart; } catch (e) {} }
         var html;
         if (!loaded) html = '<div class="safe-top"></div><div class="loading">' + L('ui.loading', 'Loading…') + '</div>';
         else if (!S) html = '<div class="safe-top"></div><div class="empty">' + L('ui.loadFailed', "Couldn't load your account.") + '<br><br><button class="btn" data-act="retry">' + L('ui.retry', 'Try again') + '</button></div>';
         else if (!S.chosen) html = viewChoose() + viewSheet();
         else {
-            html = (tab === 'plans' ? viewPlans() : tab === 'bills' ? viewBills() : viewOverview()) + viewTabs() + viewSheet();
+            html = (tab === 'plans' ? viewPlans() : tab === 'usage' ? viewUsage() : tab === 'bills' ? viewBills() : viewOverview()) + viewTabs() + viewSheet();
         }
         if (toast) html += '<div class="toast' + (toast.err ? ' err' : '') + '">' + esc(toast.text) + '</div>';
         col.innerHTML = html;
         sc = document.getElementById('scroll');
         if (sc && top) sc.scrollTop = top;
+        if (aeId) {
+            var el = document.getElementById(aeId);
+            if (el) { el.focus(); try { if (aeStart != null) el.setSelectionRange(aeStart, aeStart); } catch (e2) {} }
+        }
     }
 
     function say(text, err) {
@@ -540,8 +1075,6 @@
         if (toastTimer) clearTimeout(toastTimer);
         toastTimer = setTimeout(function () { toast = null; render(); }, 3200);
     }
-    // toast text is escaped again by render(), so take the plain text back out of L()
-    function plain(s) { return String(s).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"); }
 
     // ---- actions ----
     function refresh() {
@@ -562,30 +1095,26 @@
         return true;
     }
 
+    function run(endpoint, data, okText, failText) {
+        if (busy) return;
+        busy = true; render();
+        post('sd_carrier/' + endpoint, data).then(function (res) { apply(res, okText, failText); });
+    }
+
     function pay() {
-        if (busy) return;
-        busy = true; render();
-        post('sd_carrier/payBill').then(function (res) {
-            apply(res, function () { return S.status === 'current' ? L('ui.toastPaid', 'Paid. Service is on.') : L('ui.toastPaidShort', 'Paid.'); }, L('err.paymentFailed', 'Payment failed'));
-        });
+        run('payBill', {}, function () { return S.status === 'current' ? L('ui.toastPaid', 'Paid. Service is on.') : L('ui.toastPaidShort', 'Paid.'); }, L('err.paymentFailed', 'Payment failed'));
     }
 
-    function confirmSheet() {
+    function confirmPlan() {
         if (busy || !sheet) return;
-        var kind = sheet.kind, id = sheet.planId;
-        busy = true; render();
-        post('sd_carrier/selectPlan', { planId: id }).then(function (res) {
-            apply(res, function () {
-                if (kind === 'start') return L('ui.toastStart', "You're on %s.", S.plan ? S.plan.label : '');
-                return S.pendingPlan ? L('ui.toastQueued', 'Switch queued for %s.', day(S.dueAt)) : L('ui.toastChanged', 'Plan changed.');
-            }, L('err.switchFailed', "Couldn't change plan"));
-        });
-    }
-
-    function cancelPending() {
-        if (busy) return;
-        busy = true; render();
-        post('sd_carrier/cancelPending').then(function (res) { apply(res, L('ui.toastCancelled', 'Switch cancelled.'), L('ui.cancelFailed', "Couldn't cancel")); });
+        var id = sheet.planId, p = planById(id);
+        var pm = p ? planMode(p) : { mode: 'now' };
+        var was = S.chosen;
+        run('selectPlan', { planId: id, code: (pm.mode === 'start' || pm.mode === 'now') ? promoCode : '', payExit: pm.mode === 'exit' }, function () {
+            if (!was) return L('ui.toastStart', "You're on %s.", S.plan ? S.plan.label : '');
+            return S.pendingPlan ? L('ui.toastQueued', 'Switch queued for %s.', day(S.dueAt)) : L('ui.toastChanged', 'Plan changed.');
+        }, L('err.switchFailed', "Couldn't change plan"));
+        promoCode = '';
     }
 
     function toggleAutoPay() {
@@ -597,6 +1126,25 @@
         });
     }
 
+    document.getElementById('col').addEventListener('input', function (e) {
+        var t = e.target;
+        if (!t || !t.id) return;
+        if (t.id === 'code') promoCode = t.value;
+        else if (t.id === 'topupAmt') {
+            topupAmount = t.value;
+            var btn = document.querySelector('[data-act="topupConfirm"]');
+            var amt = parseFloat(topupAmount);
+            if (btn) btn.innerHTML = amt > 0 ? L('ui.topUpBtn', 'Top up %s', raw(fmt(amt))) : L('ui.topUp', 'Top up');
+            var chips = document.querySelectorAll('[data-act="topupPreset"]');
+            for (var i = 0; i < chips.length; i++) chips[i].classList.toggle('on', String(chips[i].getAttribute('data-amount')) === String(topupAmount));
+        }
+        else if (t.id === 'pauseIn') {
+            pauseDays = t.value;
+            var chips2 = document.querySelectorAll('[data-act="pauseDays"]');
+            for (var j = 0; j < chips2.length; j++) chips2[j].classList.toggle('on', String(chips2[j].getAttribute('data-days')) === String(pauseDays));
+        }
+    });
+
     document.getElementById('col').addEventListener('click', function (e) {
         var el = e.target.closest ? e.target.closest('[data-act]') : null;
         if (!el) return;
@@ -605,16 +1153,51 @@
         else if (act === 'pick') {
             e.stopPropagation();
             if (!S) return;
-            sheet = { kind: S.chosen ? 'switch' : 'start', planId: el.getAttribute('data-plan') };
+            promoCode = '';
+            sheet = { kind: 'plan', planId: el.getAttribute('data-plan') };
             render();
         }
         else if (act === 'closeSheet') { sheet = null; render(); }
-        else if (act === 'confirm') confirmSheet();
+        else if (act === 'confirm') confirmPlan();
         else if (act === 'pay') pay();
-        else if (act === 'cancelPending') { e.stopPropagation(); cancelPending(); }
+        else if (act === 'cancelPending') { e.stopPropagation(); run('cancelPending', {}, S && S.pendingCancel ? L('ui.toastKept', 'Your plan carries on.') : L('ui.toastCancelled', 'Switch cancelled.'), L('ui.cancelFailed', "Couldn't cancel")); }
         else if (act === 'autopay') toggleAutoPay();
         else if (act === 'bill') { var id = el.getAttribute('data-id'); openBill = openBill === id ? null : id; render(); }
         else if (act === 'retry') { loaded = false; render(); refresh(); }
+        else if (act === 'metric') { metric = el.getAttribute('data-metric'); render(); }
+        else if (act === 'topupOpen') { if (!topupAmount && S.topUp && S.topUp.presets && S.topUp.presets.length) topupAmount = String(S.topUp.presets[1] || S.topUp.presets[0]); sheet = { kind: 'topup' }; render(); }
+        else if (act === 'topupPreset') { topupAmount = el.getAttribute('data-amount'); render(); }
+        else if (act === 'topupConfirm') {
+            var amt = parseFloat(topupAmount);
+            if (!(amt > 0)) { say(plain(L('err.enterAmount', 'Enter an amount')), true); return; }
+            run('topUp', { amount: amt }, function () { return L('ui.toastToppedUp', 'Topped up. Credit is %s.', raw(fmt(S.credit))); }, L('err.paymentFailed', 'Payment failed'));
+        }
+        else if (act === 'addonOpen') { sheet = { kind: 'addon' }; render(); }
+        else if (act === 'addonBuy') { run('buyAddon', { id: el.getAttribute('data-id') }, L('ui.toastAddon', 'Data added.'), L('err.paymentFailed', 'Payment failed')); }
+        else if (act === 'pauseOpen') { if (!pauseDays) pauseDays = String(Math.min(14, (S.pauseCfg && S.pauseCfg.maxDays) || 14)); sheet = { kind: 'pause' }; render(); }
+        else if (act === 'pauseDays') { pauseDays = el.getAttribute('data-days'); render(); }
+        else if (act === 'pauseConfirm') {
+            var d = parseInt(pauseDays, 10);
+            if (!(d > 0)) { say(plain(L('err.enterDays', 'Enter a number of days')), true); return; }
+            run('pause', { days: d }, L('ui.toastPaused', 'Service paused.'), L('err.switchFailed', "Couldn't change plan"));
+        }
+        else if (act === 'resume') { run('resume', {}, L('ui.toastResumed', 'Service is back on.'), L('err.switchFailed', "Couldn't change plan")); }
+        else if (act === 'cancelOpen') { sheet = { kind: 'cancel' }; render(); }
+        else if (act === 'cancelConfirm') {
+            var fee = S.contract ? S.contract.exitFee : 0;
+            run('cancelService', { payExit: fee > 0 }, function () { return S.chosen ? L('ui.toastCancelQueued', 'Your plan will end on %s.', day(S.dueAt)) : L('ui.toastCancelledNow', 'Service cancelled.'); }, L('err.switchFailed', "Couldn't change plan"));
+        }
+        else if (act === 'receipt') { e.stopPropagation(); sheet = { kind: 'receipt', id: el.getAttribute('data-id') }; render(); }
+        else if (act === 'copyReceipt') {
+            var b = historyById(el.getAttribute('data-id'));
+            if (b) say(plain(copyText(receiptText(b)) ? L('ui.toastCopied', 'Receipt copied.') : L('ui.toastCopyFailed', "Couldn't copy.")), false);
+            render();
+        }
+        else if (act === 'saveReceipt') {
+            var b2 = historyById(el.getAttribute('data-id'));
+            if (b2) { saveText('aero-mobile-receipt-' + b2.id + '.txt', receiptText(b2)); say(plain(L('ui.toastSaved', 'Receipt saved.')), false); }
+            render();
+        }
     });
 
     // ---- data heartbeat (only counts while a plan is on and service isn't blocked) ----
@@ -623,7 +1206,7 @@
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         heartbeatTimer = setInterval(function () {
             if (document.visibilityState !== 'visible') return;
-            if (!S || !S.chosen || S.blocked) return;
+            if (!S || !S.chosen || S.blocked || S.dataState === 'blocked') return;
             post('sd_carrier/dataHeartbeat');
         }, (seconds || 60) * 1000);
     }

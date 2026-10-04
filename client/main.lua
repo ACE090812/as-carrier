@@ -23,29 +23,26 @@ RegisterNUICallback('sd_carrier/config', function(_, cb)
     })
 end)
 
-RegisterNUICallback('sd_carrier/status', function(_, cb)
-    cb(lib.callback.await('sd_carrier:status', false))
-end)
+-- The app's actions: each one is a server callback of the same name, called with whatever the page sends.
+local ACTIONS = {
+    status        = 'sd_carrier:status',
+    selectPlan    = 'sd_carrier:selectPlan',
+    cancelPending = 'sd_carrier:cancelPending',
+    cancelService = 'sd_carrier:cancelService',
+    setAutoPay    = 'sd_carrier:setAutoPay',
+    payBill       = 'sd_carrier:payBill',
+    topUp         = 'sd_carrier:topUp',
+    buyAddon      = 'sd_carrier:buyAddon',
+    pause         = 'sd_carrier:pause',
+    resume        = 'sd_carrier:resume',
+    dataHeartbeat = 'sd_carrier:dataHeartbeat',
+}
 
-RegisterNUICallback('sd_carrier/selectPlan', function(data, cb)
-    cb(lib.callback.await('sd_carrier:selectPlan', false, data))
-end)
-
-RegisterNUICallback('sd_carrier/cancelPending', function(_, cb)
-    cb(lib.callback.await('sd_carrier:cancelPending', false))
-end)
-
-RegisterNUICallback('sd_carrier/setAutoPay', function(data, cb)
-    cb(lib.callback.await('sd_carrier:setAutoPay', false, data))
-end)
-
-RegisterNUICallback('sd_carrier/payBill', function(_, cb)
-    cb(lib.callback.await('sd_carrier:payBill', false))
-end)
-
-RegisterNUICallback('sd_carrier/dataHeartbeat', function(_, cb)
-    cb(lib.callback.await('sd_carrier:dataHeartbeat', false))
-end)
+for action, callback in pairs(ACTIONS) do
+    RegisterNUICallback('sd_carrier/' .. action, function(data, cb)
+        cb(lib.callback.await(callback, false, data))
+    end)
+end
 
 RegisterNetEvent('sd_carrier:client:updated', function()
     SendNUIMessage({ action = 'sd_carrier:updated' })

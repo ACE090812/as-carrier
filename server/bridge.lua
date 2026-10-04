@@ -75,4 +75,77 @@ function CarrierBridge.removeMoney(source, account, amount)
     return true
 end
 
+--- The server id of the online player behind a framework identifier (citizenid / ESX identifier), or nil.
+function CarrierBridge.getSourceByIdentifier(id)
+    ensureCore()
+    if type(id) ~= 'string' or id == '' then return nil end
+    if framework == 'qb' and QBCore then
+        local Player = QBCore.Functions.GetPlayerByCitizenId(id)
+        return Player and Player.PlayerData.source or nil
+    elseif framework == 'qbx' and qbxExport then
+        local Player = qbxExport:GetPlayerByCitizenId(id)
+        return Player and Player.PlayerData.source or nil
+    elseif framework == 'esx' and ESX then
+        local xPlayer = ESX.GetPlayerFromIdentifier(id)
+        return xPlayer and xPlayer.source or nil
+    end
+    local n = id:match('^standalone:(%d+)$')
+    n = n and tonumber(n)
+    if n and GetPlayerName(n) then return n end
+    return nil
+end
+
+local function safeAccount(account)
+    return type(account) == 'string' and account:match('^[%w_]+$') ~= nil
+end
+
+-- ESX keeps accounts as either {"bank":100,...} (Legacy) or [{"name":"bank","money":100},...] (older).
+local function esxTakeOffline(identifier, account, amount)
+    local raw = MySQL.scalar.await('SELECT accounts FROM users WHERE identifier = ?', { identifier })
+    if type(raw) ~= 'string' or raw == '' then return false end
+    local ok, accounts = pcall(json.decode, raw)
+    if not ok or type(accounts) ~= 'table' then return false end
+
+    local done = false
+    if accounts[account] ~= nil and type(accounts[account]) == 'number' then
+        if accounts[account] < amount then return false end
+        accounts[account] = math.floor((accounts[account] - amount) * 100 + 0.5) / 100
+        done = true
+    else
+        for _, a in ipairs(accounts) do
+            if type(a) == 'table' and a.name == account then
+                if (tonumber(a.money) or 0) < amount then return false end
+                a.money = math.floor(((tonumber(a.money) or 0) - amount) * 100 + 0.5) / 100
+                done = true
+                break
+            end
+        end
+    end
+    if not done then return false end
+
+    -- Only writes if nothing changed the row since it was read.
+    local changed = MySQL.update.await('UPDATE users SET accounts = ? WHERE identifier = ? AND accounts = ?',
+        { json.encode(accounts), identifier, raw })
+    return (changed or 0) > 0
+end
+
+--- Takes money from the bank of a character who is NOT online, straight in the database, only if they can
+--- afford it. Returns true when the money was taken. (Standalone has no money, so it always succeeds.)
+function CarrierBridge.removeMoneyOffline(identifier, account, amount)
+    if amount <= 0 then return true end
+    if type(identifier) ~= 'string' or identifier == '' or not safeAccount(account) then return false end
+
+    if framework == 'qb' or framework == 'qbx' then
+        local balance = ('CAST(JSON_UNQUOTE(JSON_EXTRACT(money, \'$.%s\')) AS DECIMAL(15,2))'):format(account)
+        local changed = MySQL.update.await(([[
+            UPDATE players SET money = JSON_SET(money, '$.%s', ROUND(%s - ?, 2))
+            WHERE citizenid = ? AND JSON_EXTRACT(money, '$.%s') IS NOT NULL AND %s >= ?
+        ]]):format(account, balance, account, balance), { amount, identifier, amount })
+        return (changed or 0) > 0
+    elseif framework == 'esx' then
+        return esxTakeOffline(identifier, account, amount)
+    end
+    return true
+end
+
 return CarrierBridge
